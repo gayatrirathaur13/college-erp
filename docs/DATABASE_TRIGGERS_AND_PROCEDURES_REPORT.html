@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>University ERP — Database Triggers, Functions & Procedures Report</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap');
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #F8FAFC;
+      color: #0F172A;
+      line-height: 1.5;
+      padding: 32px 24px;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: #FFFFFF;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+      border: 1px solid #E2E8F0;
+    }
+    header {
+      border-bottom: 2px solid #0F172A;
+      padding-bottom: 20px;
+      margin-bottom: 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 800;
+      color: #0B192C;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #64748B;
+      margin-top: 4px;
+    }
+    .badge-cloud {
+      background: #0284C7;
+      color: #FFFFFF;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .intro-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .stat-box {
+      background: #F1F5F9;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid #E2E8F0;
+    }
+    .stat-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #64748B;
+    }
+    .stat-value {
+      font-size: 20px;
+      font-weight: 800;
+      color: #0F172A;
+      margin-top: 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0F172A;
+      margin-top: 28px;
+      margin-bottom: 14px;
+      padding-left: 10px;
+      border-left: 4px solid #1E3E62;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+      font-size: 12px;
+    }
+    th {
+      background: #F8FAFC;
+      text-align: left;
+      padding: 12px 14px;
+      font-weight: 700;
+      color: #475569;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      border-bottom: 2px solid #CBD5E1;
+    }
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid #E2E8F0;
+      vertical-align: top;
+    }
+    tr:hover { background: #F8FAFC; }
+    .tag {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .tag-trigger { background: #EDE9FE; color: #6D28D9; border: 1px solid #DDD6FE; }
+    .tag-func { background: #E0F2FE; color: #0369A1; border: 1px solid #BAE6FD; }
+    .tag-view { background: #DCFCE7; color: #15803D; border: 1px solid #BBF7D0; }
+    .tag-proc { background: #FEF3C7; color: #B45309; border: 1px solid #FDE68A; }
+    .code {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: #0B192C;
+      font-size: 11px;
+    }
+    .timing {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: #475569;
+      background: #F1F5F9;
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .desc { color: #334155; line-height: 1.45; }
+    .footer {
+      border-top: 1px solid #E2E8F0;
+      margin-top: 32px;
+      padding-top: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #94A3B8;
+    }
+    .print-btn {
+      background: #0B192C;
+      color: #FFFFFF;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .print-btn:hover { background: #1E3E62; }
+    @media print {
+      body { padding: 0; background: #FFF; }
+      .container { border: none; box-shadow: none; padding: 0; max-width: 100%; }
+      .print-btn { display: none; }
+      tr { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div>
+      <h1>University ERP — Database Architecture Report</h1>
+      <p class="subtitle">Complete Inventory of PL/pgSQL Triggers, Stored Functions, Procedures & Views</p>
+    </div>
+    <div style="text-align: right;">
+      <span class="badge-cloud">Supabase PostgreSQL 15+</span>
+      <div style="margin-top: 8px;">
+        <button class="print-btn" onclick="window.print()">🖨️ Save as PDF / Print</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="intro-grid">
+    <div class="stat-box">
+      <div class="stat-label">Active Triggers</div>
+      <div class="stat-value">5 Triggers</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">PL/pgSQL Functions</div>
+      <div class="stat-value">7 Functions</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Relational Views</div>
+      <div class="stat-value">6 Views</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Cross-Module Sync</div>
+      <div class="stat-value">100% Real-time</div>
+    </div>
+  </div>
+
+  <h2>1. Reactive PostgreSQL Triggers & Stored Functions</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 16%;">Module</th>
+        <th style="width: 12%;">Type</th>
+        <th style="width: 22%;">Name</th>
+        <th style="width: 18%;">Target Table & Timing</th>
+        <th>Cross-Module Synchronization Effect</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Attendance</strong></td>
+        <td><span class="tag tag-func">Function</span></td>
+        <td><span class="code">fn_update_attendance_summary()</span></td>
+        <td><span class="code">attendance_records</span><br><span class="timing">AFTER INSERT/UPDATE/DELETE</span></td>
+        <td class="desc">Recalculates attended and absent sessions; computes subject attendance %; upserts <code>attendance_summaries</code>; auto-updates student cached <code>attendance_pct</code> across all subjects.</td>
+      </tr>
+      <tr>
+        <td><strong>Attendance</strong></td>
+        <td><span class="tag tag-trigger">Trigger</span></td>
+        <td><span class="code">trg_attendance_record_sync</span></td>
+        <td><span class="code">attendance_records</span><br><span class="timing">AFTER INSERT/UPDATE/DELETE</span></td>
+        <td class="desc">Fires immediately when faculty confirms attendance. Reflects instantly on the Student Dashboard donut chart and alert widgets.</td>
+      </tr>
+      <tr>
+        <td><strong>Academics & Grading</strong></td>
+        <td><span class="tag tag-func">Function</span></td>
+        <td><span class="code">fn_recalculate_student_result()</span></td>
+        <td><span class="code">marks</span><br><span class="timing">BEFORE INSERT/UPDATE</span></td>
+        <td class="desc">Translates numerical marks into grade letters (<code>O</code>, <code>A+</code>, <code>A</code>, <code>B+</code>, <code>B</code>, <code>C</code>, <code>F</code>) and grade points (<code>10</code> to <code>0</code>). Computes semester SGPA: <code>SUM(credits * grade_point) / SUM(credits)</code> and cumulative CGPA.</td>
+      </tr>
+      <tr>
+        <td><strong>Academics & Grading</strong></td>
+        <td><span class="tag tag-trigger">Trigger</span></td>
+        <td><span class="code">trg_marks_calc_results</span></td>
+        <td><span class="code">marks</span><br><span class="timing">BEFORE INSERT/UPDATE</span></td>
+        <td class="desc">Fires when faculty grades marks. Automatically upserts <code>results</code> with Pass/Fail status and updates <code>students.sgpa</code> and <code>students.cgpa</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Finance & Accounts</strong></td>
+        <td><span class="tag tag-func">Function</span></td>
+        <td><span class="code">fn_fee_payment_update()</span></td>
+        <td><span class="code">fee_payments</span><br><span class="timing">AFTER INSERT</span></td>
+        <td class="desc">Sums all receipts for a student fee invoice; recalculates <code>paid_amount</code> and <code>due_amount</code>; updates invoice status to <code>Paid</code> or <code>Partially Paid</code>; updates <code>students.fees_due</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Finance & Accounts</strong></td>
+        <td><span class="tag tag-trigger">Trigger</span></td>
+        <td><span class="code">trg_fee_payment_sync</span></td>
+        <td><span class="code">fee_payments</span><br><span class="timing">AFTER INSERT</span></td>
+        <td class="desc">Fires when a fee payment receipt is generated. Instantly reflects zero balance on Student Fees and Finance Officer desk.</td>
+      </tr>
+      <tr>
+        <td><strong>Library Management</strong></td>
+        <td><span class="tag tag-func">Function</span></td>
+        <td><span class="code">fn_calculate_library_fine()</span></td>
+        <td><span class="code">book_issues</span><br><span class="timing">BEFORE UPDATE</span></td>
+        <td class="desc">Detects overdue book returns past <code>due_date</code>; computes fine at ₹5 per overdue day; manages inventory stock counts and adds fine charges to student billing ledger.</td>
+      </tr>
+      <tr>
+        <td><strong>Library Management</strong></td>
+        <td><span class="tag tag-trigger">Trigger</span></td>
+        <td><span class="code">trg_library_fine_calc</span></td>
+        <td><span class="code">book_issues</span><br><span class="timing">BEFORE UPDATE</span></td>
+        <td class="desc">Fires whenever a book issue record transitions to <code>Returned</code> or <code>Overdue</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Training & Placement</strong></td>
+        <td><span class="tag tag-func">Function</span></td>
+        <td><span class="code">fn_sync_placement_status()</span></td>
+        <td><span class="code">placement_applications</span><br><span class="timing">AFTER INSERT/UPDATE</span></td>
+        <td class="desc">Tracks company application status; when a student receives an offer or shortlist, updates <code>students.placement_status = 'Placed'</code> or <code>'Shortlisted'</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Training & Placement</strong></td>
+        <td><span class="tag tag-trigger">Trigger</span></td>
+        <td><span class="code">trg_placement_status_sync</span></td>
+        <td><span class="code">placement_applications</span><br><span class="timing">AFTER INSERT/UPDATE</span></td>
+        <td class="desc">Fires on drive selection updates. Reflects instantly on student profile badge and TNP placement dashboard.</td>
+      </tr>
+      <tr>
+        <td><strong>Timetable Scheduling</strong></td>
+        <td><span class="tag tag-proc">Procedure</span></td>
+        <td><span class="code">fn_check_timetable_conflict()</span></td>
+        <td><span class="code">timetables</span><br><span class="timing">BEFORE INSERT/UPDATE</span></td>
+        <td class="desc">Validates schedule triple-clash: 1) Class Section clash 2) Faculty double-booking clash 3) Classroom/Lab venue conflict across Monday-Saturday 9 AM to 4 PM.</td>
+      </tr>
+      <tr>
+        <td><strong>Faculty Payroll</strong></td>
+        <td><span class="tag tag-proc">Procedure</span></td>
+        <td><span class="code">fn_calculate_faculty_payroll()</span></td>
+        <td><span class="code">faculty_salaries</span><br><span class="timing">MONTHLY DISBURSEMENT</span></td>
+        <td class="desc">Computes 7th Pay basic pay (₹1,10,000); breaks down allowances (+₹35,000: DA, HRA, TA, Grant); gross earnings (₹1,45,000); deductions (-₹18,000: PF, TDS, PT); net take-home (₹1,27,000).</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. Relational Analytics & Reporting Views</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 22%;">View Name</th>
+        <th style="width: 25%;">Underlying PostgreSQL Tables</th>
+        <th>Purpose & Analytical Reporting Scope</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="code">v_student_attendance_summary</span></td>
+        <td><code>students</code>, <code>attendance_records</code>, <code>subjects</code></td>
+        <td class="desc">Aggregates subject-wise attended sessions, absent count, total conducted classes, and real-time percentage turnout.</td>
+      </tr>
+      <tr>
+        <td><span class="code">v_student_fee_balance</span></td>
+        <td><code>students</code>, <code>student_fees</code>, <code>fee_payments</code></td>
+        <td class="desc">Computes total invoices billed, payments received, pending outstanding dues in INR, and standing status (<code>Clear</code>, <code>Partial</code>, <code>Due</code>).</td>
+      </tr>
+      <tr>
+        <td><span class="code">v_weekly_timetable</span></td>
+        <td><code>timetables</code>, <code>subjects</code>, <code>faculty</code>, <code>sections</code></td>
+        <td class="desc">Joins the complete 6-day academic schedule (Monday to Saturday, 09:00 AM – 04:00 PM) with subject titles, room numbers, and professors.</td>
+      </tr>
+      <tr>
+        <td><span class="code">v_faculty_enrolled_students</span></td>
+        <td><code>students</code>, <code>sections</code>, <code>faculty</code></td>
+        <td class="desc">Provides the active 25-scholar cohort roster for faculty attendance registers, marks entry, and student advisory profiles.</td>
+      </tr>
+      <tr>
+        <td><span class="code">v_library_overdue_books</span></td>
+        <td><code>book_issues</code>, <code>books</code>, <code>students</code></td>
+        <td class="desc">Identifies unreturned book loans past due date with daily fine accrual calculation in PostgreSQL.</td>
+      </tr>
+      <tr>
+        <td><span class="code">v_faculty_workload</span></td>
+        <td><code>faculty</code>, <code>timetables</code>, <code>departments</code></td>
+        <td class="desc">Summarizes allocated divisions, distinct subjects taught, and total weekly contact hours per professor.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <div>University ERP System • Generated for Gayatri Rathaur (<code>gayatrirathaur13/college-erp</code>)</div>
+    <div>Supabase Project Ref: <code>zkfpncueeexdpqtyrjbz</code> • PostgreSQL 15+</div>
+  </div>
+</div>
+
+</body>
+</html>
