@@ -32,6 +32,7 @@ export const StudentAttendancePage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [attendanceData, setAttendanceData] = useState<SubjectAttendance[]>([]);
   const [timetableData, setTimetableData] = useState<any[]>([]);
+  const [selectedDay, setSelectedDay] = useState<string>('All');
 
   useEffect(() => {
     let isMounted = true;
@@ -180,53 +181,87 @@ export const StudentAttendancePage: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'timetable' && (
-        <div className="erp-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-base font-bold text-navy-950">Weekly Class Timetable</h3>
-              <p className="text-xs text-slate-500">Scheduled classroom lectures and laboratory sessions</p>
-            </div>
-            <Badge variant="navy">{user?.section || timetableData[0]?.section_name || 'Class Schedule'}</Badge>
-          </div>
+      {activeTab === 'timetable' && (() => {
+        const daysList = ['All Days', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const filtered = selectedDay === 'All Days'
+          ? timetableData
+          : timetableData.filter((t: any) => (t.day_of_week || t.day) === selectedDay);
 
-          {timetableData.length === 0 ? (
-            <div className="text-center py-12 text-slate-500 bg-slate-50/50 rounded-xl border border-slate-200">
-              <Clock className="w-8 h-8 mx-auto text-slate-400 mb-2" />
-              <p className="font-semibold text-sm text-navy-950">No Timetable Scheduled</p>
-              <p className="text-xs text-slate-500">Class timetable slots are being updated by the department.</p>
+        return (
+          <div className="erp-card p-6 bg-white space-y-5">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-navy-950 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-navy-700" />
+                  Weekly Class Timetable (Monday to Saturday, 09:00 AM - 04:00 PM)
+                </h3>
+                <p className="text-xs text-slate-500">Scheduled classroom lectures, labs, and tutorials for your section</p>
+              </div>
+              <Badge variant="navy">{user?.section || timetableData[0]?.section_name || 'B.Tech CSE - Section A'}</Badge>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {timetableData.map((slot: any) => (
-                <div key={slot.timetable_id || `${slot.day_of_week}-${slot.time}`} className="p-4 rounded-xl border border-slate-200 bg-[#FAFCFD] space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-navy-950">{slot.day_of_week}</span>
-                    <Badge variant={slot.timetable_type === 'Lab' || slot.type === 'Lab' ? 'ice' : 'neutral'}>
-                      {slot.timetable_type || slot.type || 'Lecture'}
-                    </Badge>
-                  </div>
-                  <h4 className="font-bold text-sm text-navy-900">{slot.subject_name}</h4>
-                  <div className="text-xs text-slate-600 space-y-1">
-                    <p className="flex items-center gap-1.5 font-mono text-[11px] text-navy-800">
-                      <Clock className="w-3.5 h-3.5 text-navy-600" />
-                      {slot.time || `${slot.start_time} - ${slot.end_time}`}
-                    </p>
-                    <p className="flex items-center gap-1.5 text-[11px]">
-                      <UserCheck className="w-3.5 h-3.5 text-slate-400" />
-                      {slot.faculty_name}
-                    </p>
-                    <p className="flex items-center gap-1.5 text-[11px] font-mono text-slate-500">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                      Venue: {slot.room_no || 'Campus Classroom'}
-                    </p>
-                  </div>
-                </div>
-              ))}
+
+            {/* Day Filter Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+              {daysList.map((day) => {
+                const isSelected = selectedDay === day;
+                const count = day === 'All Days' ? timetableData.length : timetableData.filter((t: any) => (t.day_of_week || t.day) === day).length;
+                return (
+                  <button
+                    key={day}
+                    onClick={() => setSelectedDay(day)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
+                      isSelected
+                        ? 'bg-navy-950 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {day}
+                    <span className="ml-1.5 opacity-75 font-mono text-[10px]">({count})</span>
+                  </button>
+                );
+              })}
             </div>
-          )}
-        </div>
-      )}
+
+            {filtered.length === 0 ? (
+              <div className="text-center py-12 text-slate-500 bg-slate-50/50 rounded-xl border border-slate-200">
+                <Clock className="w-8 h-8 mx-auto text-slate-400 mb-2" />
+                <p className="font-semibold text-sm text-navy-950">No Classes Scheduled for {selectedDay}</p>
+                <p className="text-xs text-slate-500">Department has not allocated lectures for this selected day filter.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filtered.map((slot: any, idx: number) => (
+                  <div key={slot.timetable_id || idx} className="p-4 rounded-xl border border-slate-200 bg-[#FAFCFD] hover:bg-white hover:shadow-sm transition-all space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-xs text-navy-950 bg-navy-50 px-2 py-0.5 rounded border border-navy-200">
+                        {slot.day_of_week || slot.day}
+                      </span>
+                      <Badge variant={slot.timetable_type === 'Lab' || slot.type === 'Lab' ? 'ice' : slot.type === 'Tutorial' ? 'warning' : 'neutral'}>
+                        {slot.timetable_type || slot.type || 'Lecture'}
+                      </Badge>
+                    </div>
+                    <h4 className="font-bold text-sm text-navy-900 leading-snug">{slot.subject_name || slot.subject}</h4>
+                    <div className="text-xs text-slate-600 space-y-1.5 pt-1 border-t border-slate-100">
+                      <p className="flex items-center gap-1.5 font-mono text-xs font-bold text-navy-950">
+                        <Clock className="w-3.5 h-3.5 text-navy-700" />
+                        {slot.time || `${slot.start_time} - ${slot.end_time}`}
+                      </p>
+                      <p className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                        <UserCheck className="w-3.5 h-3.5 text-slate-400" />
+                        {slot.faculty_name || slot.faculty}
+                      </p>
+                      <p className="flex items-center gap-1.5 text-[11px] font-mono text-slate-500">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                        Venue: {slot.room_no || slot.room || 'Campus Classroom'}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 };

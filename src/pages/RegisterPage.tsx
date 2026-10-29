@@ -418,7 +418,7 @@ export const RegisterPage: React.FC = () => {
                   className="w-full py-3 px-4 bg-[#4D8DFF] hover:bg-[#3A7AEB] text-white text-xs font-bold rounded-full shadow-[0px_6px_20px_rgba(77,141,255,0.35)] transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
                 >
                   {isLoading ? (
-                    <span>Registering Account in MySQL...</span>
+                    <span>Registering Account in PostgreSQL...</span>
                   ) : (
                     <>
                       <span>Complete {selectedRole === 'STUDENT' ? 'Student Registration' : 'Faculty Verification'}</span>

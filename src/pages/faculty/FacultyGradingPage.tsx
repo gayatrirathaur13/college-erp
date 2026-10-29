@@ -25,13 +25,23 @@ export const FacultyGradingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const assignedSubjects = [
-    { code: "CS302", name: "Database Management Systems", classSection: "B.Tech CSE - Section A" },
-    { code: "CS301", name: "Data Structures & Algorithms", classSection: "B.Tech CSE - Section A" }
-  ];
+  const assignedSubjects = user?.department?.includes('Electronics')
+    ? [
+        { code: "ET301", name: "VLSI Design & Architecture", classSection: "B.Tech ENTC - Section A" },
+        { code: "ET302", name: "Signals & Embedded Systems", classSection: "B.Tech ENTC - Section A" }
+      ]
+    : user?.department?.includes('Intelligence')
+    ? [
+        { code: "AI301", name: "Deep Learning & Neural Networks", classSection: "B.Tech AI&DS - Section A" },
+        { code: "AI302", name: "Natural Language Processing", classSection: "B.Tech AI&DS - Section A" }
+      ]
+    : [
+        { code: "CS302", name: "Database Management Systems", classSection: "B.Tech CSE - Section A" },
+        { code: "CS301", name: "Data Structures & Algorithms", classSection: "B.Tech CSE - Section A" }
+      ];
 
-  const [selectedClass, setSelectedClass] = useState("B.Tech CSE - Section A");
-  const [selectedSubject, setSelectedSubject] = useState("CS302 - Database Management Systems");
+  const [selectedClass, setSelectedClass] = useState(assignedSubjects[0].classSection);
+  const [selectedSubject, setSelectedSubject] = useState(`${assignedSubjects[0].code} - ${assignedSubjects[0].name}`);
   const [selectedExamType, setSelectedExamType] = useState<'Midterm' | 'Unit Test' | 'End-Semester' | 'Practical'>('Midterm');
 
   const maxMarksMap = {
@@ -335,7 +345,7 @@ export const FacultyGradingPage: React.FC = () => {
               <div>Cycle: {selectedExamType} (Max: {currentMaxMarks})</div>
             </div>
             <p className="text-[11px] text-slate-500 italic">
-              Once submitted, marks are archived in MySQL and forwarded to the Central Result Cell for semester SGPA calculation.
+              Once submitted, marks are archived in PostgreSQL and forwarded to the Central Result Cell for semester SGPA calculation.
             </p>
           </div>
         </Modal>

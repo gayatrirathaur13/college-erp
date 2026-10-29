@@ -79,11 +79,20 @@ export const StudentDashboardPage: React.FC = () => {
   const totalClasses = dashboardData?.overallAttendance?.totalClasses !== undefined ? Number(dashboardData.overallAttendance.totalClasses) : 10;
   const isMeetingRequirement = attPct >= 75;
 
-  const todayClasses = dashboardData?.classes && dashboardData.classes.length > 0 ? dashboardData.classes : [
-    { time: "09:00 AM - 10:00 AM", subject: "Core Engineering Lecture", faculty: "Dept Faculty", room: "AB-301", type: "Lecture" },
-    { time: "10:15 AM - 11:15 AM", subject: "Advanced Subject Tutorial", faculty: "Course Instructor", room: "AB-301", type: "Lecture" },
-    { time: "02:00 PM - 04:00 PM", subject: "Practical Laboratory Session", faculty: "Lab Incharge", room: "Lab 304", type: "Lab" },
-  ];
+  const currentDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+  const allWeeklyClasses = dashboardData?.classes || [];
+  const matchedTodayClasses = allWeeklyClasses.filter((c: any) => c.day === currentDayName || c.day_of_week === currentDayName);
+  const todayClasses = matchedTodayClasses.length > 0 
+    ? matchedTodayClasses 
+    : (allWeeklyClasses.filter((c: any) => c.day === 'Monday').length > 0 
+        ? allWeeklyClasses.filter((c: any) => c.day === 'Monday') 
+        : [
+            { time: "09:00 AM - 10:00 AM", subject: "Data Structures & Algorithms", faculty: "Prof. Ashwini Nair", room: "AB-301", type: "Lecture" },
+            { time: "10:15 AM - 11:15 AM", subject: "Database Management Systems", faculty: "Prof. Arvind Sharma", room: "AB-301", type: "Lecture" },
+            { time: "11:15 AM - 12:15 PM", subject: "Computer Networks", faculty: "Prof. S. R. Patil", room: "AB-301", type: "Lecture" },
+            { time: "01:15 PM - 03:15 PM", subject: "DBMS & SQL Laboratory", faculty: "Prof. Arvind Sharma", room: "Lab 304", type: "Lab" },
+            { time: "03:15 PM - 04:00 PM", subject: "Algorithms Problem Solving", faculty: "Prof. Ashwini Nair", room: "AB-301", type: "Tutorial" }
+          ]);
 
   const dynamicAttendanceItems = dashboardData?.subjectAttendance && dashboardData.subjectAttendance.length > 0
     ? dashboardData.subjectAttendance.map((s: any) => ({

@@ -133,7 +133,8 @@ export const FinanceFeesPage: React.FC<FinanceFeesPageProps> = ({ initialTab = '
       const res = await api.recordPayment(Number(selectedFeeId), {
         amount: parseFloat(payAmount),
         payment_mode: payMode,
-        transaction_reference: payRef || `TXN-${Date.now().toString().slice(-6)}`
+        transaction_reference: payRef || `TXN-${Date.now().toString().slice(-6)}`,
+        roll_no: payStudent?.roll_no
       });
       if (res.success) {
         setIsPayModalOpen(false);

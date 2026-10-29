@@ -189,12 +189,84 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Quick-fill helper chips for Student Role */}
+          {selectedRole === 'STUDENT' && (
+            <div className="mb-4 p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
+                <KeyRound className="w-3 h-3 text-slate-400" />
+                Select Demo Student (Unique Data):
+              </span>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleQuickFill('31001', 'Kavya@31001')}
+                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 transition-colors text-left"
+                  title="31001: Kavya (CSE, SGPA 8.45, 92.5% Attendance, Full Fee Paid)"
+                >
+                  31001 - Kavya (CSE)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickFill('31002', 'Siddharth@31002')}
+                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors text-left"
+                  title="31002: Siddharth (CSE, 73% Low Attendance Warning, Overdue Book)"
+                >
+                  31002 - Siddharth (Warning)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickFill('31004', 'Rohan@31004')}
+                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition-colors text-left"
+                  title="31004: Rohan (CSE, SGPA 9.40, Amazon Placed 18.5 LPA)"
+                >
+                  31004 - Rohan (Amazon Placed)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickFill('35001', 'Nidhi@35001')}
+                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 transition-colors text-left"
+                  title="35001: Nidhi (AI&DS, SGPA 8.85, Deep Learning & NLP)"
+                >
+                  35001 - Nidhi (AI&DS)
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Quick-fill helper chips for Faculty Role */}
+          {selectedRole === 'FACULTY' && (
+            <div className="mb-4 p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
+                <KeyRound className="w-3 h-3 text-slate-400" />
+                Select Faculty Account:
+              </span>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleQuickFill('FAC-001', 'Ashwini@FAC001')}
+                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 transition-colors text-left"
+                  title="Prof. Ashwini Nair: Computer Science & Engineering HOD"
+                >
+                  FAC-001 (Prof. Ashwini - CSE)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickFill('FAC-002', 'Varun@FAC002')}
+                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 transition-colors text-left"
+                  title="Prof. Varun Pawar: Electronics and Telecommunication"
+                >
+                  FAC-002 (Prof. Varun - ENTC)
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Quick-fill helper chips for Staff Role */}
           {selectedRole === 'STAFF' && (
             <div className="mb-4 p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
                 <KeyRound className="w-3 h-3 text-slate-400" />
-                Quick Login (Demo Accounts):
+                Quick Login (Staff Accounts):
               </span>
               <div className="grid grid-cols-3 gap-1.5">
                 <button

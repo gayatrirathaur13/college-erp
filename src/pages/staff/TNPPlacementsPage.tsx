@@ -138,7 +138,11 @@ export const TNPPlacementsPage: React.FC<TNPPlacementsPageProps> = ({ initialTab
     if (!selectedApp) return;
     setProcessing(true);
     try {
-      const res = await api.shortlistApplication(selectedApp.application_id, shortlistForm);
+      const res = await api.shortlistApplication(selectedApp.application_id, {
+        ...shortlistForm,
+        roll_no: selectedApp.roll_no,
+        company_name: selectedApp.company_name
+      });
       if (res.success) {
         setIsShortlistModalOpen(false);
         notify(`Application marked as ${shortlistForm.status}.`);

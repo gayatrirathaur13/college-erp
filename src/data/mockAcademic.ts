@@ -237,51 +237,47 @@ export const mockSections: Section[] = [
 ];
 
 export const mockTimetables: Timetable[] = [
-  {
-    timetable_id: 1,
-    section_id: 1,
-    subject_id: 1,
-    faculty_id: 3,
-    semester_id: 3,
-    day_of_week: "Monday",
-    start_time: "09:00 AM",
-    end_time: "10:00 AM",
-    room_no: "AB-301",
-    timetable_type: "Lecture",
-    subject_name: "Data Structures & Algorithms",
-    faculty_name: "Prof. Sunita Rao",
-    section_name: "CS-A"
-  },
-  {
-    timetable_id: 2,
-    section_id: 1,
-    subject_id: 2,
-    faculty_id: 1,
-    semester_id: 3,
-    day_of_week: "Monday",
-    start_time: "10:15 AM",
-    end_time: "11:15 AM",
-    room_no: "AB-301",
-    timetable_type: "Lecture",
-    subject_name: "Database Management Systems",
-    faculty_name: "Dr. Arvind Sharma",
-    section_name: "CS-A"
-  },
-  {
-    timetable_id: 3,
-    section_id: 1,
-    subject_id: 2,
-    faculty_id: 5,
-    semester_id: 3,
-    day_of_week: "Tuesday",
-    start_time: "02:00 PM",
-    end_time: "04:00 PM",
-    room_no: "DBMS Lab - 304",
-    timetable_type: "Lab",
-    subject_name: "Database Systems Lab",
-    faculty_name: "Prof. Kunal Joshi",
-    section_name: "CS-A"
-  }
+  // Monday (09:00 AM - 04:00 PM)
+  { timetable_id: 1, section_id: 1, subject_id: 1, faculty_id: 1, semester_id: 5, day_of_week: "Monday", start_time: "09:00 AM", end_time: "10:00 AM", room_no: "AB-301", timetable_type: "Lecture", subject_name: "Data Structures & Algorithms", faculty_name: "Prof. Ashwini Nair", section_name: "CS-A" },
+  { timetable_id: 2, section_id: 1, subject_id: 2, faculty_id: 2, semester_id: 5, day_of_week: "Monday", start_time: "10:15 AM", end_time: "11:15 AM", room_no: "AB-301", timetable_type: "Lecture", subject_name: "Database Management Systems", faculty_name: "Dr. Arvind Sharma", section_name: "CS-A" },
+  { timetable_id: 3, section_id: 1, subject_id: 3, faculty_id: 3, semester_id: 5, day_of_week: "Monday", start_time: "11:15 AM", end_time: "12:15 PM", room_no: "AB-301", timetable_type: "Lecture", subject_name: "Computer Networks", faculty_name: "Prof. S. R. Patil", section_name: "CS-A" },
+  { timetable_id: 4, section_id: 1, subject_id: 2, faculty_id: 2, semester_id: 5, day_of_week: "Monday", start_time: "01:15 PM", end_time: "03:15 PM", room_no: "DBMS Lab - 304", timetable_type: "Lab", subject_name: "Database Systems Lab", faculty_name: "Dr. Arvind Sharma", section_name: "CS-A" },
+  { timetable_id: 5, section_id: 1, subject_id: 1, faculty_id: 1, semester_id: 5, day_of_week: "Monday", start_time: "03:15 PM", end_time: "04:00 PM", room_no: "AB-301", timetable_type: "Tutorial", subject_name: "Algorithms Tutorial", faculty_name: "Prof. Ashwini Nair", section_name: "CS-A" },
+
+  // Tuesday (09:00 AM - 04:00 PM)
+  { timetable_id: 6, section_id: 1, subject_id: 3, faculty_id: 3, semester_id: 5, day_of_week: "Tuesday", start_time: "09:00 AM", end_time: "10:00 AM", room_no: "AB-302", timetable_type: "Lecture", subject_name: "Computer Networks", faculty_name: "Prof. S. R. Patil", section_name: "CS-A" },
+  { timetable_id: 7, section_id: 1, subject_id: 5, faculty_id: 4, semester_id: 5, day_of_week: "Tuesday", start_time: "10:15 AM", end_time: "11:15 AM", room_no: "AB-302", timetable_type: "Lecture", subject_name: "Software Engineering & Agile", faculty_name: "Prof. Aditi Roy", section_name: "CS-A" },
+  { timetable_id: 8, section_id: 1, subject_id: 4, faculty_id: 5, semester_id: 5, day_of_week: "Tuesday", start_time: "11:15 AM", end_time: "12:15 PM", room_no: "AB-302", timetable_type: "Lecture", subject_name: "Theory of Computation", faculty_name: "Prof. Vivek Patil", section_name: "CS-A" },
+  { timetable_id: 9, section_id: 1, subject_id: 1, faculty_id: 1, semester_id: 5, day_of_week: "Tuesday", start_time: "01:15 PM", end_time: "03:15 PM", room_no: "Lab 301", timetable_type: "Lab", subject_name: "Data Structures & Algorithms Lab", faculty_name: "Prof. Ashwini Nair", section_name: "CS-A" },
+  { timetable_id: 10, section_id: 1, subject_id: 5, faculty_id: 4, semester_id: 5, day_of_week: "Tuesday", start_time: "03:15 PM", end_time: "04:00 PM", room_no: "AB-302", timetable_type: "Tutorial", subject_name: "Software Engineering Case Studies", faculty_name: "Prof. Aditi Roy", section_name: "CS-A" },
+
+  // Wednesday (09:00 AM - 04:00 PM)
+  { timetable_id: 11, section_id: 1, subject_id: 4, faculty_id: 5, semester_id: 5, day_of_week: "Wednesday", start_time: "09:00 AM", end_time: "10:00 AM", room_no: "AB-301", timetable_type: "Lecture", subject_name: "Theory of Computation", faculty_name: "Prof. Vivek Patil", section_name: "CS-A" },
+  { timetable_id: 12, section_id: 1, subject_id: 1, faculty_id: 1, semester_id: 5, day_of_week: "Wednesday", start_time: "10:15 AM", end_time: "11:15 AM", room_no: "AB-301", timetable_type: "Lecture", subject_name: "Data Structures & Algorithms", faculty_name: "Prof. Ashwini Nair", section_name: "CS-A" },
+  { timetable_id: 13, section_id: 1, subject_id: 2, faculty_id: 2, semester_id: 5, day_of_week: "Wednesday", start_time: "11:15 AM", end_time: "12:15 PM", room_no: "AB-301", timetable_type: "Lecture", subject_name: "Database Management Systems", faculty_name: "Dr. Arvind Sharma", section_name: "CS-A" },
+  { timetable_id: 14, section_id: 1, subject_id: 3, faculty_id: 3, semester_id: 5, day_of_week: "Wednesday", start_time: "01:15 PM", end_time: "03:15 PM", room_no: "Lab 302", timetable_type: "Lab", subject_name: "Computer Networks Socket Lab", faculty_name: "Prof. S. R. Patil", section_name: "CS-A" },
+  { timetable_id: 15, section_id: 1, subject_id: 99, faculty_id: 9, semester_id: 5, day_of_week: "Wednesday", start_time: "03:15 PM", end_time: "04:00 PM", room_no: "Seminar Hall 1", timetable_type: "Seminar", subject_name: "Aptitude & Technical Placement Prep", faculty_name: "Rajesh Kumar Sharma", section_name: "CS-A" },
+
+  // Thursday (09:00 AM - 04:00 PM)
+  { timetable_id: 16, section_id: 1, subject_id: 5, faculty_id: 4, semester_id: 5, day_of_week: "Thursday", start_time: "09:00 AM", end_time: "10:00 AM", room_no: "AB-301", timetable_type: "Lecture", subject_name: "Software Engineering & Agile", faculty_name: "Prof. Aditi Roy", section_name: "CS-A" },
+  { timetable_id: 17, section_id: 1, subject_id: 3, faculty_id: 3, semester_id: 5, day_of_week: "Thursday", start_time: "10:15 AM", end_time: "11:15 AM", room_no: "AB-301", timetable_type: "Lecture", subject_name: "Computer Networks", faculty_name: "Prof. S. R. Patil", section_name: "CS-A" },
+  { timetable_id: 18, section_id: 1, subject_id: 4, faculty_id: 5, semester_id: 5, day_of_week: "Thursday", start_time: "11:15 AM", end_time: "12:15 PM", room_no: "AB-301", timetable_type: "Lecture", subject_name: "Theory of Computation", faculty_name: "Prof. Vivek Patil", section_name: "CS-A" },
+  { timetable_id: 19, section_id: 1, subject_id: 1, faculty_id: 1, semester_id: 5, day_of_week: "Thursday", start_time: "01:15 PM", end_time: "03:15 PM", room_no: "Lab 305", timetable_type: "Lab", subject_name: "Web Development & Cloud Lab", faculty_name: "Prof. Ashwini Nair", section_name: "CS-A" },
+  { timetable_id: 20, section_id: 1, subject_id: 2, faculty_id: 2, semester_id: 5, day_of_week: "Thursday", start_time: "03:15 PM", end_time: "04:00 PM", room_no: "Lab 305", timetable_type: "Workshop", subject_name: "Open Source Software & Git Workshop", faculty_name: "Dr. Arvind Sharma", section_name: "CS-A" },
+
+  // Friday (09:00 AM - 04:00 PM)
+  { timetable_id: 21, section_id: 1, subject_id: 2, faculty_id: 2, semester_id: 5, day_of_week: "Friday", start_time: "09:00 AM", end_time: "10:00 AM", room_no: "AB-301", timetable_type: "Lecture", subject_name: "Database Management Systems", faculty_name: "Dr. Arvind Sharma", section_name: "CS-A" },
+  { timetable_id: 22, section_id: 1, subject_id: 1, faculty_id: 1, semester_id: 5, day_of_week: "Friday", start_time: "10:15 AM", end_time: "11:15 AM", room_no: "AB-301", timetable_type: "Lecture", subject_name: "Data Structures & Algorithms", faculty_name: "Prof. Ashwini Nair", section_name: "CS-A" },
+  { timetable_id: 23, section_id: 1, subject_id: 5, faculty_id: 4, semester_id: 5, day_of_week: "Friday", start_time: "11:15 AM", end_time: "12:15 PM", room_no: "AB-301", timetable_type: "Lecture", subject_name: "Software Engineering & Agile", faculty_name: "Prof. Aditi Roy", section_name: "CS-A" },
+  { timetable_id: 24, section_id: 1, subject_id: 1, faculty_id: 1, semester_id: 5, day_of_week: "Friday", start_time: "01:15 PM", end_time: "03:15 PM", room_no: "Project Lab 2", timetable_type: "Lab", subject_name: "Capstone Project Lab & Review", faculty_name: "Prof. Ashwini Nair", section_name: "CS-A" },
+  { timetable_id: 25, section_id: 1, subject_id: 1, faculty_id: 1, semester_id: 5, day_of_week: "Friday", start_time: "03:15 PM", end_time: "04:00 PM", room_no: "AB-301", timetable_type: "Mentorship", subject_name: "Faculty Mentorship & Doubts Session", faculty_name: "Prof. Ashwini Nair", section_name: "CS-A" },
+
+  // Saturday (09:00 AM - 04:00 PM)
+  { timetable_id: 26, section_id: 1, subject_id: 1, faculty_id: 1, semester_id: 5, day_of_week: "Saturday", start_time: "09:00 AM", end_time: "10:00 AM", room_no: "Lab 301", timetable_type: "Practical", subject_name: "Competitive Programming & DSA Coding", faculty_name: "Prof. Ashwini Nair", section_name: "CS-A" },
+  { timetable_id: 27, section_id: 1, subject_id: 98, faculty_id: 98, semester_id: 5, day_of_week: "Saturday", start_time: "10:15 AM", end_time: "11:15 AM", room_no: "Auditorium", timetable_type: "Seminar", subject_name: "Industry Guest Lecture & Tech Talk", faculty_name: "Industry Expert (Amazon)", section_name: "CS-A" },
+  { timetable_id: 28, section_id: 1, subject_id: 4, faculty_id: 5, semester_id: 5, day_of_week: "Saturday", start_time: "11:15 AM", end_time: "12:15 PM", room_no: "Auditorium", timetable_type: "Seminar", subject_name: "AI & Cloud Computing Innovations", faculty_name: "Prof. Vivek Patil", section_name: "CS-A" },
+  { timetable_id: 29, section_id: 1, subject_id: 1, faculty_id: 1, semester_id: 5, day_of_week: "Saturday", start_time: "01:15 PM", end_time: "03:15 PM", room_no: "Innovation Hub", timetable_type: "Workshop", subject_name: "Hackathon & Project Sprint Lab", faculty_name: "Faculty Panel", section_name: "CS-A" },
+  { timetable_id: 30, section_id: 1, subject_id: 97, faculty_id: 97, semester_id: 5, day_of_week: "Saturday", start_time: "03:15 PM", end_time: "04:00 PM", room_no: "Sports Complex", timetable_type: "Activity", subject_name: "Student Council & Club Activities", faculty_name: "Student Council", section_name: "CS-A" }
 ];
 
 export const mockFacultySubjects: FacultySubject[] = [

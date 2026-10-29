@@ -1,6 +1,13 @@
-# University ERP — MySQL 8 Database Architecture & Import Guide
+# University ERP — Database Architecture & Setup Guide
 
-This directory contains the authoritative MySQL 8 database schema, development seed data, CSV mapping specifications, and the safe data import utility.
+> [!IMPORTANT]
+> **POSTGRESQL & SUPABASE DATABASE ARCHITECTURE:**
+> The primary, production-grade database schema and cross-module trigger architecture for this College ERP are built **strictly in PostgreSQL (Supabase)**.
+> - **Primary PostgreSQL Schema (DDL, Triggers, RLS, 6-Day Timetable, 25-Scholar Cohort):** [`supabase/schema.sql`](file:///h:/Pros/sih/college-erp/supabase/schema.sql)
+> - **PostgreSQL Views & Reporting:** [`database/views.sql`](file:///h:/Pros/sih/college-erp/database/views.sql)
+> - **Supabase Complete Setup Guide:** [`docs/SUPABASE_SETUP_GUIDE.md`](file:///h:/Pros/sih/college-erp/docs/SUPABASE_SETUP_GUIDE.md)
+>
+> To deploy in Supabase: Simply open your **Supabase Dashboard** -> **SQL Editor** -> Paste and Run [`supabase/schema.sql`](file:///h:/Pros/sih/college-erp/supabase/schema.sql).
 
 ---
 

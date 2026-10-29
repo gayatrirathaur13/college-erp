@@ -72,7 +72,7 @@ export const StudentPreviewModal: React.FC<StudentPreviewModalProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-slate-300 mt-0.5">
-                Demonstrates real-time MySQL synchronization without exposing confidential student credentials.
+                Demonstrates real-time PostgreSQL synchronization without exposing confidential student credentials.
               </p>
             </div>
           </div>
@@ -102,7 +102,7 @@ export const StudentPreviewModal: React.FC<StudentPreviewModalProps> = ({
               className="flex items-center gap-1.5 px-3 py-1 bg-navy-950 text-white rounded-lg font-semibold hover:bg-navy-900 transition-colors disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Fetch Live MySQL Record</span>
+              <span>Fetch Live Supabase Record</span>
             </button>
           </div>
 
@@ -146,7 +146,7 @@ export const StudentPreviewModal: React.FC<StudentPreviewModalProps> = ({
           {loading ? (
             <div className="py-16 text-center text-slate-400 space-y-2">
               <RefreshCw className="w-8 h-8 mx-auto animate-spin text-navy-800" />
-              <p className="text-xs font-semibold text-slate-600">Querying authoritative MySQL database...</p>
+              <p className="text-xs font-semibold text-slate-600">Querying authoritative PostgreSQL database...</p>
             </div>
           ) : previewData?.student ? (
             <div className="space-y-4 text-xs">
@@ -222,7 +222,7 @@ export const StudentPreviewModal: React.FC<StudentPreviewModalProps> = ({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-navy-950 text-xs uppercase tracking-wide">
-                      Section Weekly Timetable (MySQL `timetable` Join)
+                      Section Weekly Timetable (PostgreSQL `timetables` Join)
                     </span>
                     <span className="text-[11px] text-slate-500 font-mono">
                       Class: {previewData.student.section_name}

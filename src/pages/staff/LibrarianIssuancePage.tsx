@@ -109,7 +109,8 @@ export const LibrarianIssuancePage: React.FC = () => {
     try {
       const res = await api.returnBook(selectedIssue.issue_id, {
         condition_on_return: returnCondition,
-        remarks: returnRemarks || undefined
+        remarks: returnRemarks || undefined,
+        roll_no: selectedIssue.roll_no
       });
       if (res.success) {
         setIsReturnModalOpen(false);

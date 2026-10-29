@@ -22,8 +22,10 @@ export const FacultyDashboardPage: React.FC = () => {
   const { user } = useAuth();
 
   const [todayLectures, setTodayLectures] = useState<any[]>([
+    { time: "09:00 AM - 10:00 AM", subject: "Data Structures & Algorithms (CS301)", classSection: "B.Tech CSE - Section A", room: "AB-301", status: "Completed" },
     { time: "10:15 AM - 11:15 AM", subject: "Database Management Systems (CS302)", classSection: "B.Tech CSE - Section A", room: "AB-301", status: "Completed" },
-    { time: "02:00 PM - 04:00 PM", subject: "DBMS Advanced Laboratory (CS302P)", classSection: "B.Tech CSE - Section A", room: "Lab 304", status: "Upcoming" }
+    { time: "01:15 PM - 03:15 PM", subject: "DBMS Advanced Laboratory (CS302P)", classSection: "B.Tech CSE - Section A", room: "Lab 304", status: "Upcoming" },
+    { time: "03:15 PM - 04:00 PM", subject: "Algorithms Tutorial & Mentorship (CS301-T)", classSection: "B.Tech CSE - Section A", room: "AB-301", status: "Upcoming" }
   ]);
 
   useEffect(() => {
@@ -75,17 +77,17 @@ export const FacultyDashboardPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Today's Classes"
-          value="2 Lectures"
-          change="1 Completed • 1 Pending"
+          value="4 Lectures"
+          change="09:00 AM - 04:00 PM Schedule"
           trend="neutral"
           iconName="Clock"
         />
         <StatCard
-          title="Attendance Roll"
-          value="1 Pending"
-          change="Section A Lab Attendance"
-          trend="warning"
-          iconName="CheckSquare"
+          title="Enrolled Scholars"
+          value="25 Students"
+          change="Section A (Div 1) Cohort"
+          trend="up"
+          iconName="UserCheck"
         />
         <StatCard
           title="Leave Balances"

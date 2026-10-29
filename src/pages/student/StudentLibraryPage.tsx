@@ -39,24 +39,29 @@ export const StudentLibraryPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'current' | 'history' | 'catalog'>('current');
   const [currentLoans, setCurrentLoans] = useState<BorrowedBook[]>([]);
   const [returnHistory, setReturnHistory] = useState<ReturnedBook[]>([]);
+  const [catalogBooks, setCatalogBooks] = useState<any[]>(mockBooks);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
     setIsLoading(true);
-    api.getStudentLibrary()
-      .then(res => {
-        if (isMounted && res && res.success && res.data) {
-          setCurrentLoans(res.data.currentLoans || []);
-          setReturnHistory(res.data.returns || []);
+    
+    Promise.all([
+      api.getStudentLibrary().catch(() => null),
+      api.getLibraryBooks().catch(() => null)
+    ]).then(([libRes, catRes]) => {
+      if (isMounted) {
+        if (libRes?.success && libRes.data) {
+          setCurrentLoans(libRes.data.currentLoans || []);
+          setReturnHistory(libRes.data.returns || []);
         }
-      })
-      .catch(err => {
-        console.warn('Failed to load library records:', err);
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
-      });
+        if (catRes?.success && catRes.data && catRes.data.length > 0) {
+          setCatalogBooks(catRes.data);
+        }
+      }
+    }).finally(() => {
+      if (isMounted) setIsLoading(false);
+    });
 
     return () => { isMounted = false; };
   }, []);
@@ -234,7 +239,7 @@ export const StudentLibraryPage: React.FC = () => {
               )
             }
           ]}
-          data={mockBooks}
+          data={catalogBooks}
           title="Central Library Catalog Search"
           subtitle="Locate physical shelf coordinates across university stacks"
           searchPlaceholder="Search titles, authors, or categories..."
