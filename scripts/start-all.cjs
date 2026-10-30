@@ -19,10 +19,11 @@ const isWindows = process.platform === 'win32';
 const npmCmd = isWindows ? 'npm.cmd' : 'npm';
 const nodeCmd = process.execPath;
 
-// Start Express Backend
-const backend = spawn(nodeCmd, ['server/index.js'], {
+// Start Express Backend with live reloading
+const backend = spawn(nodeCmd, ['--watch', 'server/index.js'], {
   cwd: rootDir,
   stdio: 'inherit',
+  shell: false,
   env: { ...process.env, PORT: '5000' }
 });
 
@@ -30,6 +31,7 @@ const backend = spawn(nodeCmd, ['server/index.js'], {
 const frontend = spawn(npmCmd, ['run', 'dev'], {
   cwd: rootDir,
   stdio: 'inherit',
+  shell: isWindows,
   env: { ...process.env }
 });
 

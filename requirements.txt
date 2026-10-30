@@ -1,0 +1,45 @@
+# =============================================================================
+# COLLEGE ERP SYSTEM - SYSTEM & PACKAGE REQUIREMENTS
+# =============================================================================
+# Note: This is a full-stack JavaScript / TypeScript web application built with
+# Node.js, React (Vite), Express.js, Supabase, and MySQL.
+# =============================================================================
+
+# --- RUNTIME & ENVIRONMENT PREREQUISITES ---
+node>=18.0.0
+npm>=9.0.0
+os=Windows 10/11, macOS, or Linux
+
+# --- CORE FRONTEND DEPENDENCIES (Root package.json) ---
+# Install command: npm install
+react==18.3.1
+react-dom==18.3.1
+react-router-dom==6.26.2
+recharts==3.10.1
+lucide-react==0.441.0
+@supabase/supabase-js==2.45.4
+
+# --- FRONTEND DEV TOOLS & COMPILERS ---
+vite==5.4.2
+typescript==5.5.3
+tailwindcss==3.4.10
+postcss==8.4.45
+autoprefixer==10.4.20
+@types/react==18.3.5
+@types/react-dom==18.3.0
+@vitejs/plugin-react==4.3.1
+
+# --- BACKEND API DEPENDENCIES (server/package.json) ---
+# Install command: cd server && npm install
+express==4.21.0
+cors==2.8.5
+dotenv==16.4.5
+jsonwebtoken==9.0.2
+bcryptjs==2.4.3
+mysql2==3.11.3
+pg==8.23.1
+googleapis==144.0.0
+
+# --- DATABASE & STORAGE OPTIONS ---
+# Primary / Cloud: Supabase (PostgreSQL) - cloud hosted
+# Local Alternative: MySQL Server 8.0+ (Windows service on port 3306)

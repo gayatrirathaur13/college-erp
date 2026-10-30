@@ -19,24 +19,24 @@ async function login(req, res, next) {
 
     const trimmedId = identifier.trim();
 
-    // Query authoritative MySQL user_account table
+    // Query user_account table or view (compatible with both Supabase PostgreSQL and MySQL)
     const [rows] = await query(
       `SELECT u.user_id, u.identifier, u.email, u.password_hash, u.role, u.student_id, u.faculty_id, u.staff_id, u.is_active,
               s.student_name, s.roll_no, s.current_semester, s.branch,
               d.department_name, c.course_name, sec.section_name,
-              f.faculty_name, f.faculty_code, des.designation_name,
-              CONCAT(st.first_name, ' ', COALESCE(st.last_name, '')) AS staff_name
+              f.faculty_name, u.identifier AS faculty_code, des.designation_name,
+              COALESCE(st.staff_name, u.identifier) AS staff_name
        FROM user_account u
        LEFT JOIN student s ON u.student_id = s.student_id
        LEFT JOIN department d ON (s.department_id = d.department_id OR (u.faculty_id IS NOT NULL AND d.department_id = (SELECT department_id FROM faculty WHERE faculty_id = u.faculty_id)))
        LEFT JOIN course c ON (c.department_id = s.department_id)
        LEFT JOIN section sec ON s.section_id = sec.section_id
        LEFT JOIN faculty f ON u.faculty_id = f.faculty_id
-       LEFT JOIN designation des ON f.designation_id = des.designation_id
        LEFT JOIN staff st ON u.staff_id = st.staff_id
-       WHERE (u.identifier = ? OR u.email = ? OR s.roll_no = ? OR s.prn = ? OR f.faculty_code = ? OR f.email = ? OR st.email = ?)
+       LEFT JOIN designation des ON (f.designation_id = des.designation_id OR st.designation_id = des.designation_id)
+       WHERE (u.identifier = ? OR u.email = ?)
        LIMIT 1`,
-      [trimmedId, trimmedId, trimmedId, trimmedId, trimmedId, trimmedId, trimmedId]
+      [trimmedId, trimmedId]
     );
 
     if (!rows || rows.length === 0) {
@@ -77,8 +77,8 @@ async function login(req, res, next) {
     const isStudent = user.role === 'STUDENT';
     const isAdmin = user.role === 'ADMIN';
 
-    // Verify bcrypt hash or individual user formula
-    let isValid = await bcrypt.compare(password, user.password_hash);
+    // Verify direct password match, bcrypt hash, or individual user formula
+    let isValid = (password === user.password_hash) || await bcrypt.compare(password, user.password_hash).catch(() => false);
     if (!isValid) {
       if (isAdmin) {
         if (password === 'Admin@2026') isValid = true;
@@ -123,8 +123,8 @@ async function login(req, res, next) {
     let staffId = null;
     if (isStaff) {
       const [staffRows] = await query(
-        "SELECT staff_id, CONCAT(first_name, ' ', COALESCE(last_name,'')) AS staff_name FROM staff WHERE staff_id = (SELECT staff_id FROM user_account WHERE user_id = ?)",
-        [user.user_id]
+        "SELECT staff_id, staff_name FROM staff WHERE staff_id = ?",
+        [user.staff_id || (user.user_id ? user.user_id - 20000 : 0)]
       );
       if (staffRows.length > 0) {
         staffName = staffRows[0].staff_name;
@@ -243,7 +243,7 @@ async function getCurrentUser(req, res, next) {
       let staffData = null;
       if (staffId) {
         const [rows] = await query(
-          `SELECT st.staff_id, st.first_name, st.middle_name, st.last_name, st.email, st.phone_no,
+          `SELECT st.staff_id, st.staff_name, st.email, st.phone_no,
                   d.department_name, des.designation_name
            FROM staff st
            LEFT JOIN department d ON st.department_id = d.department_id
@@ -256,9 +256,7 @@ async function getCurrentUser(req, res, next) {
       }
       const staffRoleLabels = { TNP_HEAD: 'TNP Cell Head', FINANCE: 'Finance Officer', LIBRARIAN: 'Librarian' };
       const staffRoleDepts = { TNP_HEAD: 'Training & Placement Cell', FINANCE: 'Finance & Accounts', LIBRARIAN: 'Central Library' };
-      const name = staffData
-        ? [staffData.first_name, staffData.middle_name, staffData.last_name].filter(Boolean).join(' ')
-        : req.user.identifier;
+      const name = staffData?.staff_name || req.user.identifier;
 
       return res.json({
         success: true,
