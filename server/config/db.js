@@ -29,6 +29,27 @@ if (isPostgres) {
     connectionTimeoutMillis: 10000
   });
   console.log('[DATABASE] Initialized Supabase PostgreSQL connection pool.');
+  pool.getConnection = async () => {
+    const client = await pool.connect();
+    return {
+      execute: async (sql, params = []) => {
+        let paramIndex = 1;
+        const pgSql = sql.replace(/\?/g, () => `$${paramIndex++}`);
+        const res = await client.query(pgSql, params);
+        return [res.rows, res.fields];
+      },
+      query: async (sql, params = []) => {
+        let paramIndex = 1;
+        const pgSql = sql.replace(/\?/g, () => `$${paramIndex++}`);
+        const res = await client.query(pgSql, params);
+        return [res.rows, res.fields];
+      },
+      beginTransaction: async () => client.query('BEGIN'),
+      commit: async () => client.query('COMMIT'),
+      rollback: async () => client.query('ROLLBACK'),
+      release: () => client.release()
+    };
+  };
 } else {
   const mysql = require('mysql2/promise');
   pool = mysql.createPool({
