@@ -15,8 +15,12 @@ interface StudentMarkInput {
   student_id: number;
   roll_no: string;
   name: string;
-  marks_obtained: number;
+  mid_sem: number;
+  internal_marks: number;
+  end_sem: number;
+  total_marks: number;
   grade_letter: string;
+  grade_point: number;
   status: 'Present' | 'Absent';
 }
 
@@ -42,25 +46,15 @@ export const FacultyGradingPage: React.FC = () => {
 
   const [selectedClass, setSelectedClass] = useState(assignedSubjects[0].classSection);
   const [selectedSubject, setSelectedSubject] = useState(`${assignedSubjects[0].code} - ${assignedSubjects[0].name}`);
-  const [selectedExamType, setSelectedExamType] = useState<'Midterm' | 'Unit Test' | 'End-Semester' | 'Practical'>('Midterm');
 
-  const maxMarksMap = {
-    'Unit Test': 25,
-    'Midterm': 50,
-    'End-Semester': 60,
-    'Practical': 50
-  };
-
-  const currentMaxMarks = maxMarksMap[selectedExamType];
-
-  const calculateGrade = (score: number, max: number): string => {
-    const pct = (score / max) * 100;
-    if (pct >= 90) return 'O';
-    if (pct >= 80) return 'A+';
-    if (pct >= 70) return 'A';
-    if (pct >= 60) return 'B+';
-    if (pct >= 50) return 'B';
-    return 'F';
+  const calculateGrade = (total: number): { letter: string; point: number } => {
+    if (total >= 90) return { letter: 'O', point: 10.0 };
+    if (total >= 80) return { letter: 'A+', point: 9.0 };
+    if (total >= 70) return { letter: 'A', point: 8.0 };
+    if (total >= 60) return { letter: 'B', point: 7.0 };
+    if (total >= 50) return { letter: 'C', point: 6.0 };
+    if (total >= 40) return { letter: 'D', point: 4.0 };
+    return { letter: 'F', point: 0.0 };
   };
 
   const [marksRoster, setMarksRoster] = useState<StudentMarkInput[]>([]);
@@ -76,14 +70,26 @@ export const FacultyGradingPage: React.FC = () => {
         setLoading(true);
         const res = await api.getFacultyGrading();
         if (isMounted && res.success && res.data && res.data.length > 0) {
-          const mapped: StudentMarkInput[] = res.data.map((m: any) => ({
-            student_id: m.student_id,
-            roll_no: m.roll_no,
-            name: m.name,
-            marks_obtained: Math.min(Number(m.marks_obtained || 42), currentMaxMarks),
-            grade_letter: m.grade_letter || calculateGrade(Number(m.marks_obtained || 42), currentMaxMarks),
-            status: m.status === 'Absent' ? 'Absent' : 'Present'
-          }));
+          const mapped: StudentMarkInput[] = res.data.map((m: any) => {
+            const rawTotal = Number(m.marks_obtained || 80);
+            const mid = m.mid_sem !== null && m.mid_sem !== undefined ? Number(m.mid_sem) : Number((rawTotal * 0.20).toFixed(1));
+            const internal = m.internal_marks !== null && m.internal_marks !== undefined ? Number(m.internal_marks) : Number((rawTotal * 0.20).toFixed(1));
+            const endsem = m.end_sem !== null && m.end_sem !== undefined ? Number(m.end_sem) : Number((rawTotal - mid - internal).toFixed(1));
+            const total = mid + internal + endsem;
+            const { letter, point } = calculateGrade(total);
+            return {
+              student_id: m.student_id,
+              roll_no: m.roll_no,
+              name: m.name,
+              mid_sem: Math.min(Math.max(mid, 0), 20),
+              internal_marks: Math.min(Math.max(internal, 0), 20),
+              end_sem: Math.min(Math.max(endsem, 0), 60),
+              total_marks: total,
+              grade_letter: m.grade_letter || letter,
+              grade_point: point,
+              status: m.status === 'Absent' ? 'Absent' : 'Present'
+            };
+          });
           setMarksRoster(mapped);
         }
       } catch (err) {
@@ -94,23 +100,28 @@ export const FacultyGradingPage: React.FC = () => {
     }
     loadGrading();
     return () => { isMounted = false; };
-  }, [currentMaxMarks]);
+  }, []);
 
-  const handleScoreChange = (student_id: number, val: string) => {
+  const handleComponentChange = (student_id: number, field: 'mid_sem' | 'internal_marks' | 'end_sem', val: string) => {
     setValidationError(null);
     const num = Number(val);
+    const maxVal = field === 'end_sem' ? 60 : 20;
 
-    if (num < 0 || num > currentMaxMarks) {
-      setValidationError(`Invalid score: Marks must be between 0 and maximum possible marks (${currentMaxMarks}).`);
+    if (num < 0 || num > maxVal) {
+      setValidationError(`Invalid score: ${field === 'mid_sem' ? 'Mid-Sem' : field === 'internal_marks' ? 'Internal' : 'End-Sem'} must be between 0 and ${maxVal}.`);
       return;
     }
 
     setMarksRoster(prev => prev.map(s => {
       if (s.student_id === student_id) {
+        const updated = { ...s, [field]: num };
+        const total = updated.mid_sem + updated.internal_marks + updated.end_sem;
+        const { letter, point } = calculateGrade(total);
         return {
-          ...s,
-          marks_obtained: num,
-          grade_letter: calculateGrade(num, currentMaxMarks)
+          ...updated,
+          total_marks: total,
+          grade_letter: letter,
+          grade_point: point
         };
       }
       return s;
@@ -123,7 +134,10 @@ export const FacultyGradingPage: React.FC = () => {
       await api.saveFacultyGrading({
         marks: marksRoster.map(s => ({
           student_id: s.student_id,
-          marks_obtained: s.marks_obtained,
+          mid_sem: s.mid_sem,
+          internal_marks: s.internal_marks,
+          end_sem: s.end_sem,
+          marks_obtained: s.total_marks,
           grade_letter: s.grade_letter,
           status: s.status
         }))
@@ -204,17 +218,10 @@ export const FacultyGradingPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block font-bold text-slate-700 mb-1">Examination Category *</label>
-            <select
-              value={selectedExamType}
-              onChange={(e) => setSelectedExamType(e.target.value as any)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none font-semibold text-navy-950"
-            >
-              <option value="Midterm">Mid-Semester Exam (Max: 50)</option>
-              <option value="Unit Test">Continuous Assessment / Unit Test (Max: 25)</option>
-              <option value="End-Semester">End-Semester Final (Max: 60)</option>
-              <option value="Practical">Laboratory Practical & Viva (Max: 50)</option>
-            </select>
+            <label className="block font-bold text-slate-700 mb-1">Grading Standard *</label>
+            <div className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl font-semibold text-navy-950 text-xs">
+              60 End-Sem / 20 Mid-Sem / 20 Internal (Total: 100)
+            </div>
           </div>
         </div>
       </div>
@@ -235,7 +242,7 @@ export const FacultyGradingPage: React.FC = () => {
               Student Marks Roster ({marksRoster.length} Candidates)
             </h3>
             <p className="text-xs text-slate-500">
-              Assessment: <strong>{selectedExamType}</strong> • Maximum Evaluation Marks: <strong>{currentMaxMarks}</strong>
+              Official Distribution: <strong>Mid-Sem (20)</strong> • <strong>Internal (20)</strong> • <strong>End-Sem (60)</strong> • Total: <strong>100 Marks</strong>
             </p>
           </div>
 
@@ -262,12 +269,15 @@ export const FacultyGradingPage: React.FC = () => {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-[#FAFBFD] border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold">
-                  <th className="p-3 w-16">#</th>
+                  <th className="p-3 w-12">#</th>
                   <th className="p-3">Roll Number</th>
                   <th className="p-3">Candidate Name</th>
-                  <th className="p-3">Marks Obtained (Max: {currentMaxMarks})</th>
-                  <th className="p-3 text-center">Calculated Letter Grade</th>
-                  <th className="p-3 text-center">Exam Attendance</th>
+                  <th className="p-3 text-center">Mid-Sem [20]</th>
+                  <th className="p-3 text-center">Internal [20]</th>
+                  <th className="p-3 text-center">End-Sem [60]</th>
+                  <th className="p-3 text-center">Total [100]</th>
+                  <th className="p-3 text-center">Grade</th>
+                  <th className="p-3 text-center">Attendance</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -276,25 +286,70 @@ export const FacultyGradingPage: React.FC = () => {
                     <td className="p-3 font-mono text-slate-400">{idx + 1}</td>
                     <td className="p-3 font-mono font-bold text-navy-950">{student.roll_no}</td>
                     <td className="p-3 font-semibold text-slate-800">{student.name}</td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min={0}
-                          max={currentMaxMarks}
-                          disabled={isSubmitted}
-                          value={student.marks_obtained}
-                          onChange={(e) => handleScoreChange(student.student_id, e.target.value)}
-                          className="w-20 px-2.5 py-1 text-xs font-mono font-bold text-navy-950 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-navy-800 disabled:bg-slate-100 disabled:text-slate-500"
-                        />
-                        <span className="text-slate-400 font-mono text-[11px]">/ {currentMaxMarks}</span>
-                      </div>
-                    </td>
+                    
+                    {/* Mid-Sem [Max: 20] */}
                     <td className="p-3 text-center">
-                      <span className="font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200 text-xs">
+                      <input
+                        type="number"
+                        min={0}
+                        max={20}
+                        step="0.5"
+                        disabled={isSubmitted}
+                        value={student.mid_sem}
+                        onChange={(e) => handleComponentChange(student.student_id, 'mid_sem', e.target.value)}
+                        className="w-16 px-2 py-1 text-center font-mono font-bold text-navy-950 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-navy-800 disabled:bg-slate-100"
+                      />
+                    </td>
+
+                    {/* Internal [Max: 20] */}
+                    <td className="p-3 text-center">
+                      <input
+                        type="number"
+                        min={0}
+                        max={20}
+                        step="0.5"
+                        disabled={isSubmitted}
+                        value={student.internal_marks}
+                        onChange={(e) => handleComponentChange(student.student_id, 'internal_marks', e.target.value)}
+                        className="w-16 px-2 py-1 text-center font-mono font-bold text-navy-950 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-navy-800 disabled:bg-slate-100"
+                      />
+                    </td>
+
+                    {/* End-Sem [Max: 60] */}
+                    <td className="p-3 text-center">
+                      <input
+                        type="number"
+                        min={0}
+                        max={60}
+                        step="0.5"
+                        disabled={isSubmitted}
+                        value={student.end_sem}
+                        onChange={(e) => handleComponentChange(student.student_id, 'end_sem', e.target.value)}
+                        className="w-16 px-2 py-1 text-center font-mono font-bold text-navy-950 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-navy-800 disabled:bg-slate-100"
+                      />
+                    </td>
+
+                    {/* Total (100) */}
+                    <td className="p-3 text-center font-mono font-extrabold text-navy-950 text-sm">
+                      {student.total_marks.toFixed(1)}
+                    </td>
+
+                    {/* Calculated Grade */}
+                    <td className="p-3 text-center">
+                      <span className={`font-mono font-extrabold px-2.5 py-0.5 rounded border text-xs ${
+                        student.grade_letter === 'O' ? 'bg-purple-50 text-purple-800 border-purple-200' :
+                        student.grade_letter === 'A+' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                        student.grade_letter === 'A' ? 'bg-teal-50 text-teal-800 border-teal-200' :
+                        student.grade_letter === 'B' ? 'bg-blue-50 text-blue-800 border-blue-200' :
+                        student.grade_letter === 'C' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                        student.grade_letter === 'D' ? 'bg-orange-50 text-orange-800 border-orange-200' :
+                        'bg-rose-50 text-rose-800 border-rose-200'
+                      }`}>
                         {student.grade_letter}
                       </span>
                     </td>
+
+                    {/* Exam Attendance */}
                     <td className="p-3 text-center">
                       <Badge variant="success">Present</Badge>
                     </td>
@@ -342,7 +397,7 @@ export const FacultyGradingPage: React.FC = () => {
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1 font-mono text-slate-800">
               <div>Subject: {selectedSubject}</div>
               <div>Class: {selectedClass}</div>
-              <div>Cycle: {selectedExamType} (Max: {currentMaxMarks})</div>
+              <div>Evaluation Scheme: Mid-Sem [20] + Internal [20] + End-Sem [60] = 100 Marks</div>
             </div>
             <p className="text-[11px] text-slate-500 italic">
               Once submitted, marks are archived in PostgreSQL and forwarded to the Central Result Cell for semester SGPA calculation.

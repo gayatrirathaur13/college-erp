@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Briefcase, Users, Award, Plus, Search, Filter, RefreshCw,
   CheckCircle2, XCircle, Clock, Calendar, Check, ExternalLink, ChevronDown
@@ -11,6 +12,8 @@ interface TNPPlacementsPageProps {
 }
 
 export const TNPPlacementsPage: React.FC<TNPPlacementsPageProps> = ({ initialTab = 'drives' }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'drives' | 'applications' | 'placements'>(initialTab);
 
   // Data states
@@ -40,11 +43,13 @@ export const TNPPlacementsPage: React.FC<TNPPlacementsPageProps> = ({ initialTab
     company_id: '',
     job_role: '',
     job_type: 'Full-Time',
-    package: '6.00 LPA',
-    drive_date: '',
-    registration_deadline: '',
+    package: '7.50 LPA',
+    minimum_cgpa: '7.0',
+    allowed_branch: 'All',
+    backlog_allowed: 'No',
+    drive_date: new Date().toISOString().split('T')[0],
     description: '',
-    status: 'Open for Registration'
+    status: 'Scheduled'
   });
 
   const [actionNotice, setActionNotice] = useState<string>('');
@@ -85,19 +90,49 @@ export const TNPPlacementsPage: React.FC<TNPPlacementsPageProps> = ({ initialTab
   }, []);
 
   useEffect(() => {
-    if (initialTab) setActiveTab(initialTab);
-  }, [initialTab]);
+    if (location.pathname.includes('/applications')) {
+      setActiveTab('applications');
+    } else if (location.pathname.includes('/placements')) {
+      setActiveTab('placements');
+    } else if (location.pathname.includes('/drives')) {
+      setActiveTab('drives');
+    } else if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [location.pathname, initialTab]);
+
+  const handleTabChange = (tab: 'drives' | 'applications' | 'placements') => {
+    setActiveTab(tab);
+    if (tab === 'drives') navigate('/staff/drives');
+    else if (tab === 'applications') navigate('/staff/applications');
+    else if (tab === 'placements') navigate('/staff/placements');
+  };
 
   // Handle Add Drive
   const handleAddDrive = async (e: React.FormEvent) => {
     e.preventDefault();
     setProcessing(true);
     try {
-      const res = await api.addDrive(newDrive);
+      const res = await api.addDrive({
+        company_id: newDrive.company_id,
+        job_role: newDrive.job_role,
+        job_type: newDrive.job_type,
+        package: newDrive.package,
+        package_lpa: parseFloat(newDrive.package) || 7.5,
+        minimum_cgpa: parseFloat(newDrive.minimum_cgpa) || 7.0,
+        allowed_branch: newDrive.allowed_branch,
+        backlog_allowed: newDrive.backlog_allowed,
+        drive_date: newDrive.drive_date,
+        description: newDrive.description,
+        status: newDrive.status
+      });
       if (res.success) {
         setIsDriveModalOpen(false);
         notify('Job drive posted successfully.');
-        const dRes = await api.getTNPDrives();
+        const [dRes, dashRes] = await Promise.all([
+          api.getTNPDrives(),
+          api.getTNPDashboard().catch(() => null)
+        ]);
         if (dRes.success) setDrives(dRes.data);
       }
     } catch (err: any) {
@@ -216,7 +251,7 @@ export const TNPPlacementsPage: React.FC<TNPPlacementsPageProps> = ({ initialTab
       {/* Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200">
         <button
-          onClick={() => setActiveTab('drives')}
+          onClick={() => handleTabChange('drives')}
           className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'drives'
               ? 'border-[#2ECC71] text-[#2ECC71]'
@@ -227,7 +262,7 @@ export const TNPPlacementsPage: React.FC<TNPPlacementsPageProps> = ({ initialTab
           <span>Job Drives ({drives.length})</span>
         </button>
         <button
-          onClick={() => setActiveTab('applications')}
+          onClick={() => handleTabChange('applications')}
           className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'applications'
               ? 'border-[#2ECC71] text-[#2ECC71]'
@@ -238,7 +273,7 @@ export const TNPPlacementsPage: React.FC<TNPPlacementsPageProps> = ({ initialTab
           <span>Applications & Shortlisting ({applications.length})</span>
         </button>
         <button
-          onClick={() => setActiveTab('placements')}
+          onClick={() => handleTabChange('placements')}
           className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'placements'
               ? 'border-[#2ECC71] text-[#2ECC71]'
@@ -667,30 +702,66 @@ export const TNPPlacementsPage: React.FC<TNPPlacementsPageProps> = ({ initialTab
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Drive Date</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Drive Date *</label>
               <input
                 type="date"
                 value={newDrive.drive_date}
                 onChange={e => setNewDrive({ ...newDrive, drive_date: e.target.value })}
+                required
                 className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#2ECC71]"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Deadline Date</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Minimum CGPA Criteria * <span className="text-emerald-600 font-semibold">(e.g. 7.00)</span>
+              </label>
               <input
-                type="date"
-                value={newDrive.registration_deadline}
-                onChange={e => setNewDrive({ ...newDrive, registration_deadline: e.target.value })}
-                className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#2ECC71]"
+                type="number"
+                step="0.01"
+                min="0"
+                max="10"
+                placeholder="7.00"
+                value={newDrive.minimum_cgpa}
+                onChange={e => setNewDrive({ ...newDrive, minimum_cgpa: e.target.value })}
+                required
+                className="w-full text-xs font-mono font-bold px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#2ECC71]"
               />
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Eligible Disciplines / Branch *</label>
+              <select
+                value={newDrive.allowed_branch}
+                onChange={e => setNewDrive({ ...newDrive, allowed_branch: e.target.value })}
+                className="w-full text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#2ECC71]"
+              >
+                <option value="All">All Engineering Branches (Open)</option>
+                <option value="CS">Computer Science (CS)</option>
+                <option value="IT">Information Technology (IT)</option>
+                <option value="ENTC">Electronics & Telecommunication (ENTC)</option>
+                <option value="AIDS">Artificial Intelligence & Data Science (AIDS)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Active Backlogs Allowed?</label>
+              <select
+                value={newDrive.backlog_allowed}
+                onChange={e => setNewDrive({ ...newDrive, backlog_allowed: e.target.value })}
+                className="w-full text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#2ECC71]"
+              >
+                <option value="No">No (Clean Academic Record Required)</option>
+                <option value="Yes">Yes (Allowed with ATKT)</option>
+              </select>
+            </div>
+          </div>
+
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Description / Eligibility</label>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Job Role Overview & Instructions</label>
             <textarea
-              rows={3}
-              placeholder="Minimum CGPA 7.0, all CS/IT/ENTC branches eligible..."
+              rows={2}
+              placeholder="Detailed recruitment drive guidelines, selection rounds, and candidate prerequisites..."
               value={newDrive.description}
               onChange={e => setNewDrive({ ...newDrive, description: e.target.value })}
               className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#2ECC71]"

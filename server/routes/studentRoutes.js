@@ -16,6 +16,7 @@ router.get('/attendance', studentController.getAttendance);
 
 // Financial Invoices & Payment History
 router.get('/fees', studentController.getFees);
+router.post('/fees/pay', studentController.payFee);
 
 // Library Loans, Circulation & Overdue Fines
 router.get('/library', studentController.getLibrary);

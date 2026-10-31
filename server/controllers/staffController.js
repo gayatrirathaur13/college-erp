@@ -81,9 +81,9 @@ async function getProfile(req, res, next) {
 async function getTNPDashboard(req, res, next) {
   try {
     const [[companiesCount]] = await query('SELECT COUNT(*) AS c FROM company');
-    const [[drivesCount]]    = await query("SELECT COUNT(*) AS c FROM job_drive WHERE status IN ('Open for Registration','In Progress')");
+    const [[drivesCount]]    = await query("SELECT COUNT(*) AS c FROM job_drive WHERE status IN ('Scheduled', 'Open', 'Open for Registration', 'In Progress')");
     const [[applicationsCount]] = await query('SELECT COUNT(*) AS c FROM application');
-    const [[placedCount]]    = await query("SELECT COUNT(*) AS c FROM placement WHERE status = 'Accepted'");
+    const [[placedCount]]    = await query("SELECT COUNT(*) AS c FROM placement WHERE status IN ('Offer Accepted', 'Accepted', 'Selected')");
 
     const [recentDrives] = await query(
       `SELECT jd.drive_id, jd.job_role, jd.package, jd.drive_date, jd.status, c.company_name, c.industry_type
@@ -107,10 +107,10 @@ async function getTNPDashboard(req, res, next) {
       success: true,
       data: {
         stats: {
-          totalCompanies: companiesCount.c,
-          activeDrives: drivesCount.c,
-          totalApplications: applicationsCount.c,
-          studentsPlaced: placedCount.c
+          totalCompanies: parseInt(companiesCount.c, 10),
+          activeDrives: parseInt(drivesCount.c, 10),
+          totalApplications: parseInt(applicationsCount.c, 10),
+          studentsPlaced: parseInt(placedCount.c, 10)
         },
         recentDrives,
         recentPlacements
@@ -123,7 +123,7 @@ async function getCompanies(req, res, next) {
   try {
     const [companies] = await query(
       `SELECT c.*, COUNT(jd.drive_id) AS total_drives,
-              SUM(CASE WHEN jd.status IN ('Open for Registration','In Progress') THEN 1 ELSE 0 END) AS active_drives
+              SUM(CASE WHEN jd.status IN ('Scheduled', 'Open', 'Open for Registration','In Progress') THEN 1 ELSE 0 END) AS active_drives
        FROM company c
        LEFT JOIN job_drive jd ON c.company_id = jd.company_id
        GROUP BY c.company_id
@@ -165,14 +165,18 @@ async function updateCompany(req, res, next) {
 async function getDrives(req, res, next) {
   try {
     const [drives] = await query(
-      `SELECT jd.*, c.company_name, c.industry_type, c.location,
-              COUNT(a.application_id) AS total_applications,
-              SUM(CASE WHEN pl.status = 'Accepted' THEN 1 ELSE 0 END) AS selected_count
+      `SELECT jd.drive_id, jd.company_id, jd.job_role, jd.job_type, jd.package, jd.package_lpa,
+              jd.drive_date, jd.description, jd.status,
+              c.company_name, c.industry_type, c.location,
+              e.minimum_cgpa, e.allowed_branch, e.backlog_allowed,
+              COUNT(DISTINCT a.application_id) AS total_applications,
+              SUM(CASE WHEN pl.status IN ('Accepted', 'Offer Accepted') THEN 1 ELSE 0 END) AS selected_count
        FROM job_drive jd
        JOIN company c ON jd.company_id = c.company_id
+       LEFT JOIN eligibility e ON jd.drive_id = e.drive_id
        LEFT JOIN application a ON jd.drive_id = a.drive_id
        LEFT JOIN placement pl ON a.application_id = pl.application_id
-       GROUP BY jd.drive_id
+       GROUP BY jd.drive_id, c.company_name, c.industry_type, c.location, e.minimum_cgpa, e.allowed_branch, e.backlog_allowed
        ORDER BY jd.drive_date DESC`
     );
     res.json({ success: true, data: drives });
@@ -180,33 +184,90 @@ async function getDrives(req, res, next) {
 }
 
 async function addDrive(req, res, next) {
+  let conn;
   try {
-    const { company_id, job_role, job_type, package: pkg, drive_date, registration_deadline, description, status } = req.body;
+    const { 
+      company_id, 
+      job_role, 
+      job_type, 
+      package: pkg, 
+      package_lpa, 
+      drive_date, 
+      description, 
+      status, 
+      minimum_cgpa, 
+      allowed_branch, 
+      backlog_allowed 
+    } = req.body;
+
     if (!company_id || !job_role) {
       return res.status(400).json({ success: false, message: 'Company and job role are required.' });
     }
 
-    let driveStatus = status || 'Open for Registration';
-    if (driveStatus === 'Upcoming') driveStatus = 'Open for Registration';
-    if (driveStatus === 'Ongoing') driveStatus = 'In Progress';
-    if (driveStatus === 'Cancelled') driveStatus = 'Closed';
+    let driveStatus = status || 'Scheduled';
+    if (driveStatus === 'Upcoming' || driveStatus === 'Open for Registration') driveStatus = 'Scheduled';
 
-    const [result] = await query(
-      `INSERT INTO job_drive (company_id, job_role, job_type, package, drive_date, registration_deadline, description, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    const minCgpaNum = minimum_cgpa !== undefined && minimum_cgpa !== '' ? Number(minimum_cgpa) : 6.0;
+    const branchAllowed = allowed_branch || 'All';
+    const numLpa = package_lpa ? Number(package_lpa) : (pkg ? (parseFloat(pkg) || 6.0) : 6.0);
+    const pkgText = pkg || `${numLpa.toFixed(2)} LPA`;
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    // 1. Insert into job_drive
+    const [driveResult] = await conn.execute(
+      `INSERT INTO job_drive (company_id, job_role, job_type, package, package_lpa, drive_date, description, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING drive_id`,
       [
         company_id,
         job_role,
         job_type || 'Full-Time',
-        pkg || 'Best in Industry',
+        pkgText,
+        numLpa,
         drive_date || new Date().toISOString().split('T')[0],
-        registration_deadline || new Date().toISOString().split('T')[0],
-        description || null,
+        description || `Campus Recruitment for ${job_role}`,
         driveStatus
       ]
     );
-    res.status(201).json({ success: true, message: 'Job drive added successfully.', drive_id: result.insertId });
-  } catch (err) { next(err); }
+
+    const driveId = driveResult[0]?.drive_id || driveResult.insertId;
+
+    // 2. Insert into eligibility table
+    const [eligResult] = await conn.execute(
+      `INSERT INTO eligibility (drive_id, allowed_branch, minimum_cgpa, backlog_allowed, other_criteria)
+       VALUES (?, ?, ?, ?, ?) RETURNING eligibility_id`,
+      [
+        driveId,
+        branchAllowed,
+        minCgpaNum,
+        backlog_allowed || 'No',
+        `Minimum CGPA: ${minCgpaNum}`
+      ]
+    );
+
+    const eligId = eligResult[0]?.eligibility_id || eligResult.insertId;
+
+    // 3. Link eligibility_id to job_drive
+    await conn.execute(
+      `UPDATE job_drive SET eligibility_id = ? WHERE drive_id = ?`,
+      [eligId, driveId]
+    );
+
+    await conn.commit();
+
+    return res.status(201).json({
+      success: true,
+      message: 'Job drive posted successfully with eligibility criteria.',
+      drive_id: driveId,
+      eligibility_id: eligId
+    });
+  } catch (err) {
+    if (conn) await conn.rollback();
+    next(err);
+  } finally {
+    if (conn) conn.release();
+  }
 }
 
 async function updateDriveStatus(req, res, next) {
@@ -262,7 +323,7 @@ async function getApplications(req, res, next) {
     if (conditions.length > 0) {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
-    sql += ' ORDER BY a.application_id DESC LIMIT 500';
+    sql += ' ORDER BY a.application_id DESC LIMIT 2000';
 
     const [rows] = await query(sql, params);
     res.json({ success: true, data: rows });
@@ -336,26 +397,26 @@ async function getPlacements(req, res, next) {
 
 async function getFinanceDashboard(req, res, next) {
   try {
-    const [[totalDue]]       = await query("SELECT COALESCE(SUM(amount_due - amount_paid), 0) AS total FROM student_fee WHERE status != 'Paid'");
-    const [[totalCollected]] = await query("SELECT COALESCE(SUM(amount), 0) AS total FROM payment WHERE status IN ('Success', 'Successful')");
+    const [[totalDue]]       = await query("SELECT COALESCE(SUM(balance_amount), 0) AS total FROM student_fee WHERE status != 'Paid'");
+    const [[totalCollected]] = await query("SELECT COALESCE(SUM(amount), 0) AS total FROM payment WHERE status IN ('Success', 'Successful') OR payment_status = 'Success'");
     const [[pendingCount]]   = await query("SELECT COUNT(*) AS c FROM student_fee WHERE status != 'Paid'");
-    const [[overdueCount]]   = await query("SELECT COUNT(*) AS c FROM student_fee WHERE status != 'Paid' AND due_date < CURDATE()");
+    const [[overdueCount]]   = await query("SELECT COUNT(*) AS c FROM student_fee WHERE status != 'Paid' AND due_date < CURRENT_DATE");
 
     const [recentPayments] = await query(
-      `SELECT p.payment_id, p.amount, p.payment_date, p.payment_mode, p.status, p.transaction_reference,
+      `SELECT p.payment_id, p.amount, p.payment_date, p.payment_mode, COALESCE(p.payment_status, p.status) AS status, p.transaction_reference,
               s.student_name, s.roll_no, sf.invoice_no, fs.fee_type
        FROM payment p
        JOIN student_fee sf ON p.student_fee_id = sf.student_fee_id
        JOIN student s ON sf.student_id = s.student_id
        LEFT JOIN fee_structure fs ON sf.fee_structure_id = fs.fee_structure_id
-       ORDER BY p.payment_date DESC LIMIT 10`
+       ORDER BY p.payment_date DESC, p.payment_id DESC LIMIT 10`
     );
 
     const [deptBreakdown] = await query(
       `SELECT d.department_name, 
               COALESCE(SUM(sf.amount_due), 0) AS due, 
               COALESCE(SUM(sf.amount_paid), 0) AS paid,
-              COALESCE(SUM(sf.amount_due - sf.amount_paid), 0) AS balance,
+              COALESCE(SUM(sf.balance_amount), 0) AS balance,
               COUNT(sf.student_fee_id) AS fee_records
        FROM department d
        LEFT JOIN student s ON d.department_id = s.department_id
@@ -370,8 +431,8 @@ async function getFinanceDashboard(req, res, next) {
         stats: {
           totalDue: parseFloat(totalDue.total) || 0,
           totalCollected: parseFloat(totalCollected.total) || 0,
-          pendingFees: pendingCount.c,
-          overdueCount: overdueCount.c
+          pendingFees: parseInt(pendingCount.c) || 0,
+          overdueCount: parseInt(overdueCount.c) || 0
         },
         recentPayments,
         deptBreakdown
@@ -483,7 +544,7 @@ async function recordPayment(req, res, next) {
     await conn.beginTransaction();
 
     const [sf] = await conn.execute(
-      'SELECT student_fee_id, amount_due, amount_paid FROM student_fee WHERE student_fee_id = ?',
+      'SELECT student_fee_id, amount_due, scholarship_amount, amount_paid, balance_amount, status FROM student_fee WHERE student_fee_id = ?',
       [studentFeeId]
     );
     if (!sf.length) {
@@ -491,27 +552,34 @@ async function recordPayment(req, res, next) {
       return res.status(404).json({ success: false, message: 'Fee record not found.' });
     }
 
-    const ref = transaction_reference || `TXN-${Date.now()}`;
+    const currentBalance = parseFloat(sf[0].balance_amount !== undefined ? sf[0].balance_amount : (sf[0].amount_due - sf[0].amount_paid));
+    if (payAmount > currentBalance) {
+      await conn.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `Payment amount ₹${payAmount.toLocaleString('en-IN')} exceeds outstanding balance ₹${currentBalance.toLocaleString('en-IN')}.`
+      });
+    }
+
+    const ref = transaction_reference || `TXN-${Date.now().toString().slice(-6)}`;
     await conn.execute(
-      `INSERT INTO payment (student_fee_id, amount, payment_date, payment_mode, transaction_reference, status)
-       VALUES (?, ?, CURDATE(), ?, ?, 'Success')`,
+      `INSERT INTO payment (student_fee_id, amount, payment_date, payment_mode, transaction_reference, status, payment_status)
+       VALUES (?, ?, CURRENT_DATE, ?, ?, 'Success', 'Success')`,
       [studentFeeId, payAmount, payment_mode || 'Cash/Counter', ref]
     );
 
-    const newPaid = (parseFloat(sf[0].amount_paid) || 0) + payAmount;
-    const due = parseFloat(sf[0].amount_due) || 0;
-    const newStatus = newPaid >= due ? 'Paid' : 'Partially Paid';
-
-    await conn.execute(
-      'UPDATE student_fee SET amount_paid = ?, status = ? WHERE student_fee_id = ?',
-      [newPaid, newStatus, studentFeeId]
+    // Supabase trigger fn_payment_after automatically recalculates amount_paid, balance_amount, and status
+    const [updatedSf] = await conn.execute(
+      'SELECT student_fee_id, amount_due, scholarship_amount, amount_paid, balance_amount, status FROM student_fee WHERE student_fee_id = ?',
+      [studentFeeId]
     );
 
     await conn.commit();
+    const updated = updatedSf[0] || sf[0];
     res.json({
       success: true,
-      message: `Payment of ₹${payAmount.toLocaleString('en-IN')} recorded successfully. Status: ${newStatus}.`,
-      data: { student_fee_id: studentFeeId, amount_paid: newPaid, status: newStatus }
+      message: `Payment of ₹${payAmount.toLocaleString('en-IN')} recorded successfully. Remaining balance: ₹${parseFloat(updated.balance_amount || 0).toLocaleString('en-IN')}. Status: ${updated.status}.`,
+      data: updated
     });
   } catch (err) {
     if (conn) await conn.rollback();
@@ -577,34 +645,34 @@ async function getAllPayments(req, res, next) {
 async function getLibraryDashboard(req, res, next) {
   try {
     const [[totalBooks]]    = await query('SELECT COUNT(*) AS c FROM book');
-    const [[totalCopies]]   = await query('SELECT COALESCE(SUM(total_copies), 0) AS c FROM book');
-    const [[availCopies]]   = await query('SELECT COALESCE(SUM(available_copies), 0) AS c FROM book');
-    const [[activeIssues]]  = await query("SELECT COUNT(*) AS c FROM book_issue WHERE status = 'Issued' OR status = 'Overdue'");
-    const [[overdueCount]]  = await query("SELECT COUNT(*) AS c FROM book_issue WHERE status = 'Overdue' OR (status = 'Issued' AND due_date < CURDATE())");
+    const [[totalCopies]]   = await query('SELECT COUNT(*) AS c FROM book_copy');
+    const [[availCopies]]   = await query("SELECT COUNT(*) AS c FROM book_copy WHERE status = 'Available'");
+    const [[activeIssues]]  = await query("SELECT COUNT(*) AS c FROM book_issue WHERE status = 'Issued' OR issue_status = 'Issued'");
+    const [[overdueCount]]  = await query("SELECT COUNT(*) AS c FROM book_issue WHERE (status = 'Issued' OR issue_status = 'Issued') AND due_date < CURRENT_DATE");
 
     const [recentIssues] = await query(
-      `SELECT bi.issue_id, bi.issue_date, bi.due_date, bi.status AS issue_status,
+      `SELECT bi.issue_id, bi.issue_date, bi.due_date, COALESCE(bi.issue_status, bi.status) AS issue_status,
               s.student_name, s.roll_no,
               b.title, b.isbn, bc.accession_no,
               br.return_date,
-              GREATEST(0, DATEDIFF(CURDATE(), bi.due_date)) AS days_overdue
+              GREATEST(0, (CURRENT_DATE - bi.due_date)::integer) AS days_overdue
        FROM book_issue bi
        JOIN student s ON bi.student_id = s.student_id
        JOIN book_copy bc ON bi.copy_id = bc.copy_id
        JOIN book b ON bc.isbn = b.isbn
        LEFT JOIN book_return br ON bi.issue_id = br.issue_id
-       ORDER BY bi.issue_date DESC LIMIT 10`
+       ORDER BY bi.issue_date DESC, bi.issue_id DESC LIMIT 10`
     );
 
     res.json({
       success: true,
       data: {
         stats: {
-          totalBooks: totalBooks.c,
+          totalBooks: parseInt(totalBooks.c) || 0,
           totalCopies: parseInt(totalCopies.c) || 0,
           availableCopies: parseInt(availCopies.c) || 0,
-          activeIssues: activeIssues.c,
-          overdueCount: overdueCount.c
+          activeIssues: parseInt(activeIssues.c) || 0,
+          overdueCount: parseInt(overdueCount.c) || 0
         },
         recentIssues
       }
@@ -758,11 +826,11 @@ async function updateBook(req, res, next) {
 async function getIssues(req, res, next) {
   try {
     const { status, student_id } = req.query;
-    let sql = `SELECT bi.issue_id, bi.issue_date, bi.due_date, bi.status AS issue_status, bi.remarks,
+    let sql = `SELECT bi.issue_id, bi.issue_date, bi.due_date, COALESCE(bi.issue_status, bi.status) AS issue_status, bi.remarks,
                       s.student_name, s.roll_no, s.student_id,
                       b.title, b.isbn, bc.copy_id, bc.accession_no,
                       br.return_date, br.condition_on_return,
-                      GREATEST(0, DATEDIFF(CURDATE(), bi.due_date)) AS days_overdue
+                      GREATEST(0, (CURRENT_DATE - bi.due_date)::integer) AS days_overdue
                FROM book_issue bi
                JOIN student s ON bi.student_id = s.student_id
                JOIN book_copy bc ON bi.copy_id = bc.copy_id
@@ -772,8 +840,14 @@ async function getIssues(req, res, next) {
     const conditions = [];
 
     if (status) {
-      conditions.push('bi.status = ?');
-      params.push(status);
+      if (status === 'Overdue') {
+        conditions.push("(bi.status = 'Issued' OR bi.issue_status = 'Issued') AND bi.due_date < CURRENT_DATE");
+      } else if (status === 'Issued') {
+        conditions.push("(bi.status = 'Issued' OR bi.issue_status = 'Issued') AND bi.due_date >= CURRENT_DATE");
+      } else {
+        conditions.push("(bi.status = ? OR bi.issue_status = ?)");
+        params.push(status, status);
+      }
     }
     if (student_id) {
       conditions.push('bi.student_id = ?');
@@ -783,7 +857,7 @@ async function getIssues(req, res, next) {
     if (conditions.length) {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
-    sql += ' ORDER BY bi.issue_date DESC LIMIT 500';
+    sql += ' ORDER BY bi.issue_date DESC, bi.issue_id DESC LIMIT 500';
 
     const [rows] = await query(sql, params);
     res.json({ success: true, data: rows });
@@ -793,7 +867,7 @@ async function getIssues(req, res, next) {
 async function issueBook(req, res, next) {
   let conn;
   try {
-    const { student_id, roll_no, isbn, due_days } = req.body;
+    const { student_id, roll_no, isbn, due_days, issue_date, due_date } = req.body;
     let resolvedStudentId = student_id;
 
     conn = await pool.getConnection();
@@ -809,11 +883,10 @@ async function issueBook(req, res, next) {
       return res.status(400).json({ success: false, message: 'Student (ID or Roll No) and Book ISBN are required.' });
     }
 
-    // Determine librarian_id
-    let libId = 1;
-    if (req.user.staff_id) {
-      const [libs] = await conn.execute('SELECT librarian_id FROM librarian WHERE staff_id = ? LIMIT 1', [req.user.staff_id]);
-      if (libs.length) libId = libs[0].librarian_id;
+    // Determine staff_id (librarian)
+    let staffId = 1;
+    if (req.user && req.user.staff_id) {
+      staffId = req.user.staff_id;
     }
 
     // Find an available copy
@@ -828,20 +901,54 @@ async function issueBook(req, res, next) {
     const copyId = copies[0].copy_id;
     const days = parseInt(due_days) || 14;
 
+    // Support backdating: issue_date can be explicitly provided (e.g. 10 days ago)
+    let resolvedIssueDate = issue_date || new Date().toISOString().split('T')[0];
+    let resolvedDueDate = due_date;
+    if (!resolvedDueDate) {
+      const d = new Date(resolvedIssueDate);
+      d.setDate(d.getDate() + days);
+      resolvedDueDate = d.toISOString().split('T')[0];
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isOverdueNow = resolvedDueDate < todayStr;
+    const initialStatus = isOverdueNow ? 'Overdue' : 'Issued';
+
     const [issueRes] = await conn.execute(
-      `INSERT INTO book_issue (copy_id, student_id, librarian_id, issue_date, due_date, status, remarks)
-       VALUES (?, ?, ?, CURDATE(), DATE_ADD(CURDATE(), INTERVAL ? DAY), 'Issued', 'Issued via Staff Portal')`,
-      [copyId, resolvedStudentId, libId, days]
+      `INSERT INTO book_issue (copy_id, student_id, staff_id, issue_date, due_date, status, issue_status, remarks)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING issue_id`,
+      [
+        copyId,
+        resolvedStudentId,
+        staffId,
+        resolvedIssueDate,
+        resolvedDueDate,
+        initialStatus,
+        initialStatus,
+        isOverdueNow ? `Backdated loan issued on ${resolvedIssueDate} (Overdue)` : 'Issued via Staff Portal'
+      ]
     );
+
+    const issueId = issueRes[0]?.issue_id || issueRes.insertId;
 
     await conn.execute("UPDATE book_copy SET status = 'Issued' WHERE copy_id = ?", [copyId]);
     await conn.execute("UPDATE book SET available_copies = GREATEST(0, available_copies - 1) WHERE isbn = ?", [isbn.trim()]);
 
+    let daysLate = 0;
+    let overdueFine = 0;
+    if (isOverdueNow) {
+      const msDiff = new Date(todayStr).getTime() - new Date(resolvedDueDate).getTime();
+      daysLate = Math.max(0, Math.floor(msDiff / (1000 * 60 * 60 * 24)));
+      overdueFine = daysLate * 5.00;
+    }
+
     await conn.commit();
     res.status(201).json({
       success: true,
-      message: `Book issued successfully. Due in ${days} days. Accession No: ${copies[0].accession_no}.`,
-      issue_id: issueRes.insertId
+      message: `Book issued successfully.${isOverdueNow ? ` (Backdated: Due date was ${resolvedDueDate}, ${daysLate} days overdue. Accrued fine: ₹${overdueFine.toFixed(2)})` : ` Due in ${days} days.`} Accession No: ${copies[0].accession_no}.`,
+      issue_id: issueId,
+      days_overdue: daysLate,
+      fine_amount: overdueFine
     });
   } catch (err) {
     if (conn) await conn.rollback();
@@ -861,7 +968,7 @@ async function returnBook(req, res, next) {
     await conn.beginTransaction();
 
     const [issue] = await conn.execute(
-      `SELECT bi.*, DATEDIFF(CURDATE(), bi.due_date) AS days_late_calc
+      `SELECT bi.*, GREATEST(0, (CURRENT_DATE - bi.due_date)::integer) AS days_late_calc
        FROM book_issue bi WHERE bi.issue_id = ?`,
       [id]
     );
@@ -869,7 +976,7 @@ async function returnBook(req, res, next) {
       await conn.rollback();
       return res.status(404).json({ success: false, message: 'Issue record not found.' });
     }
-    if (issue[0].status === 'Returned') {
+    if (issue[0].status === 'Returned' || issue[0].issue_status === 'Returned') {
       await conn.rollback();
       return res.status(400).json({ success: false, message: 'This book has already been marked as returned.' });
     }
@@ -880,12 +987,13 @@ async function returnBook(req, res, next) {
     // Insert into book_return
     const [retRes] = await conn.execute(
       `INSERT INTO book_return (issue_id, return_date, condition_on_return, days_late, remarks)
-       VALUES (?, CURDATE(), ?, ?, ?)`,
+       VALUES (?, CURRENT_DATE, ?, ?, ?) RETURNING return_id`,
       [id, bookCondition, daysLate, remarks || 'Returned via Staff Portal']
     );
+    const returnId = retRes[0]?.return_id || retRes.insertId;
 
-    // Update issue status
-    await conn.execute("UPDATE book_issue SET status = 'Returned' WHERE issue_id = ?", [id]);
+    // Update issue status and return_date
+    await conn.execute("UPDATE book_issue SET status = 'Returned', issue_status = 'Returned', return_date = CURRENT_DATE WHERE issue_id = ?", [id]);
 
     // Update copy status
     const copyStatus = bookCondition === 'Damaged' ? 'Damaged' : (bookCondition === 'Lost' ? 'Lost' : 'Available');
@@ -897,20 +1005,23 @@ async function returnBook(req, res, next) {
       await conn.execute("UPDATE book SET available_copies = LEAST(total_copies, available_copies + 1) WHERE isbn = ?", [bc[0].isbn]);
     }
 
-    // If late, insert fine record
+    // If late, insert fine record with status Pending (settled via pay_library_fine)
+    let fineRecord = null;
     if (daysLate > 0) {
       const fineAmount = daysLate * 5.00; // ₹5 per day
-      await conn.execute(
-        `INSERT INTO fine (student_id, return_id, fine_type, fine_amount, fine_date, payment_status)
-         VALUES (?, ?, 'Late Return', ?, CURDATE(), 'Unpaid')`,
-        [issue[0].student_id, retRes.insertId, fineAmount]
+      const [fineRes] = await conn.execute(
+        `INSERT INTO fine (student_id, return_id, issue_id, fine_type, fine_amount, fine_date, payment_status, paid_status)
+         VALUES (?, ?, ?, 'Late Return', ?, CURRENT_DATE, 'Pending', 'Pending') RETURNING fine_id`,
+        [issue[0].student_id, returnId, id, fineAmount]
       );
+      fineRecord = { fine_id: fineRes[0]?.fine_id || fineRes.insertId, amount: fineAmount };
     }
 
     await conn.commit();
     res.json({
       success: true,
-      message: `Book returned successfully.${daysLate > 0 ? ` (Late by ${daysLate} days. Fine of ₹${daysLate * 5} applied)` : ''}`
+      message: `Book returned successfully.${daysLate > 0 ? ` (Late by ${daysLate} days. Fine of ₹${daysLate * 5} applied)` : ''}`,
+      fine: fineRecord
     });
   } catch (err) {
     if (conn) await conn.rollback();
@@ -924,18 +1035,115 @@ async function getOverdueBooks(req, res, next) {
   try {
     const [rows] = await query(
       `SELECT bi.issue_id, bi.issue_date, bi.due_date,
-              GREATEST(0, DATEDIFF(CURDATE(), bi.due_date)) AS days_overdue,
+              GREATEST(0, (CURRENT_DATE - bi.due_date)::integer) AS days_overdue,
               s.student_name, s.roll_no, s.email, s.phone,
-              b.title, b.isbn, bc.accession_no
+              b.title, b.isbn, bc.accession_no,
+              f.fine_id, f.fine_amount, f.payment_status AS fine_status
        FROM book_issue bi
        JOIN student s ON bi.student_id = s.student_id
        JOIN book_copy bc ON bi.copy_id = bc.copy_id
        JOIN book b ON bc.isbn = b.isbn
-       WHERE bi.status IN ('Issued', 'Overdue') AND bi.due_date < CURDATE()
-       ORDER BY days_overdue DESC`
+       LEFT JOIN fine f ON bi.issue_id = f.issue_id
+       WHERE (bi.status IN ('Issued', 'Overdue') OR bi.issue_status IN ('Issued', 'Overdue'))
+         AND bi.due_date < CURRENT_DATE
+       ORDER BY days_overdue DESC, bi.issue_id DESC`
     );
     res.json({ success: true, data: rows });
   } catch (err) { next(err); }
+}
+
+async function getFines(req, res, next) {
+  try {
+    const { status, search } = req.query;
+    let sql = `SELECT f.fine_id, f.student_id, f.issue_id, f.fine_type, f.fine_amount, f.fine_date, f.paid_date,
+                      COALESCE(f.payment_status, f.paid_status, 'Pending') AS payment_status,
+                      s.student_name, s.roll_no, s.email,
+                      b.title, b.isbn
+               FROM fine f
+               JOIN student s ON f.student_id = s.student_id
+               LEFT JOIN book_issue bi ON f.issue_id = bi.issue_id
+               LEFT JOIN book_copy bc ON bi.copy_id = bc.copy_id
+               LEFT JOIN book b ON bc.isbn = b.isbn`;
+    const params = [];
+    const conditions = [];
+    if (status) {
+      conditions.push('(f.payment_status = ? OR f.paid_status = ?)');
+      params.push(status, status);
+    }
+    if (search) {
+      conditions.push('(s.student_name LIKE ? OR s.roll_no LIKE ? OR b.title LIKE ?)');
+      const s = `%${search.trim()}%`;
+      params.push(s, s, s);
+    }
+    if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
+    sql += ' ORDER BY f.fine_id DESC LIMIT 300';
+
+    const [rows] = await query(sql, params);
+    res.json({ success: true, data: rows });
+  } catch (err) { next(err); }
+}
+
+async function collectFine(req, res, next) {
+  let conn;
+  try {
+    const { id } = req.params; // fine_id or issue_id
+    const { issue_id, amount } = req.body || {};
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    let targetFineId = id ? parseInt(id) : null;
+
+    if (!targetFineId && issue_id) {
+      const [existingFine] = await conn.execute(
+        "SELECT fine_id FROM fine WHERE issue_id = ? AND payment_status = 'Pending' LIMIT 1",
+        [issue_id]
+      );
+      if (existingFine.length) {
+        targetFineId = existingFine[0].fine_id;
+      } else {
+        const [issue] = await conn.execute(
+          `SELECT bi.*, GREATEST(0, (CURRENT_DATE - bi.due_date)::integer) AS days_late
+           FROM book_issue bi WHERE bi.issue_id = ?`,
+          [issue_id]
+        );
+        if (issue.length) {
+          const fineAmt = amount ? parseFloat(amount) : (issue[0].days_late * 5.00);
+          const [newFine] = await conn.execute(
+            `INSERT INTO fine (student_id, issue_id, fine_type, fine_amount, fine_date, payment_status, paid_status, paid_date)
+             VALUES (?, ?, 'Late Return', ?, CURRENT_DATE, 'Paid', 'Paid', CURRENT_DATE) RETURNING fine_id`,
+            [issue[0].student_id, issue_id, fineAmt]
+          );
+          targetFineId = newFine[0]?.fine_id || newFine.insertId;
+        }
+      }
+    }
+
+    if (!targetFineId) {
+      await conn.rollback();
+      return res.status(400).json({ success: false, message: 'Valid fine ID or issue ID is required.' });
+    }
+
+    // Update in Supabase (settle fine)
+    await conn.execute(
+      "UPDATE fine SET payment_status = 'Paid', paid_status = 'Paid', paid_date = CURRENT_DATE WHERE fine_id = ?",
+      [targetFineId]
+    );
+
+    const [updated] = await conn.execute('SELECT * FROM fine WHERE fine_id = ?', [targetFineId]);
+
+    await conn.commit();
+    res.json({
+      success: true,
+      message: `Library fine #${targetFineId} of ₹${parseFloat(updated[0]?.fine_amount || 0).toLocaleString('en-IN')} collected and settled as Paid in Supabase!`,
+      data: updated[0]
+    });
+  } catch (err) {
+    if (conn) await conn.rollback();
+    next(err);
+  } finally {
+    if (conn) conn.release();
+  }
 }
 
 module.exports = {
@@ -950,5 +1158,5 @@ module.exports = {
   recordPayment, getFeeStructures, addFeeStructure, getAllPayments,
   // Library
   getLibraryDashboard, getBooks, addBook, updateBook,
-  getIssues, issueBook, returnBook, getOverdueBooks
+  getIssues, issueBook, returnBook, getOverdueBooks, getFines, collectFine
 };

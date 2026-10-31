@@ -59,5 +59,8 @@ router.get('/library/issues',             sc.requireRole('LIBRARIAN', 'ADMIN'), 
 router.post('/library/issues',            sc.requireRole('LIBRARIAN', 'ADMIN'), sc.issueBook);
 router.put('/library/issues/:id/return',  sc.requireRole('LIBRARIAN', 'ADMIN'), sc.returnBook);
 router.get('/library/overdue',            sc.requireRole('LIBRARIAN', 'ADMIN'), sc.getOverdueBooks);
+router.get('/library/fines',              sc.requireRole('LIBRARIAN', 'ADMIN'), sc.getFines);
+router.put('/library/fines/:id/collect',  sc.requireRole('LIBRARIAN', 'ADMIN'), sc.collectFine);
+router.post('/library/fines/collect',     sc.requireRole('LIBRARIAN', 'ADMIN'), sc.collectFine);
 
 module.exports = router;

@@ -47,8 +47,10 @@ export const LibrarianBooksPage: React.FC = () => {
   // Quick Issue from book page
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
   const [issueBookTarget, setIssueBookTarget] = useState<any>(null);
+  const todayStr = new Date().toISOString().split('T')[0];
   const [issueRollNo, setIssueRollNo] = useState('');
   const [issueDays, setIssueDays] = useState('14');
+  const [issueDate, setIssueDate] = useState(todayStr);
   const [issuing, setIssuing] = useState(false);
 
   const fetchBooks = async () => {
@@ -150,6 +152,7 @@ export const LibrarianBooksPage: React.FC = () => {
     setIssueBookTarget(book);
     setIssueRollNo('');
     setIssueDays('14');
+    setIssueDate(todayStr);
     setIsIssueModalOpen(true);
   };
 
@@ -161,7 +164,8 @@ export const LibrarianBooksPage: React.FC = () => {
       const res = await api.issueBook({
         isbn: issueBookTarget.isbn,
         roll_no: issueRollNo.trim(),
-        due_days: parseInt(issueDays) || 14
+        due_days: parseInt(issueDays) || 14,
+        issue_date: issueDate || todayStr
       });
       if (res.success) {
         setIsIssueModalOpen(false);
@@ -665,18 +669,62 @@ export const LibrarianBooksPage: React.FC = () => {
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Loan Duration</label>
-            <select
-              value={issueDays}
-              onChange={e => setIssueDays(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#E67E22] bg-white"
-            >
-              <option value="7">7 Days</option>
-              <option value="14">14 Days (Standard)</option>
-              <option value="30">30 Days (Semester)</option>
-            </select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Issue Date</label>
+              <input
+                type="date"
+                value={issueDate}
+                max={todayStr}
+                onChange={e => setIssueDate(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#E67E22] bg-white font-medium"
+              />
+              <span className="text-[10px] text-slate-400">Can select backdated date</span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Loan Duration</label>
+              <select
+                value={issueDays}
+                onChange={e => setIssueDays(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#E67E22] bg-white font-medium"
+              >
+                <option value="7">7 Days</option>
+                <option value="14">14 Days (Standard)</option>
+                <option value="30">30 Days (Semester)</option>
+              </select>
+            </div>
           </div>
+
+          {/* Real-time Backdate / Due Date calculation preview */}
+          {(() => {
+            const iss = new Date(issueDate || todayStr);
+            const due = new Date(iss);
+            due.setDate(due.getDate() + (parseInt(issueDays) || 14));
+            const dueStr = due.toISOString().split('T')[0];
+            const msDiff = new Date(todayStr).getTime() - due.getTime();
+            const lateDays = Math.max(0, Math.floor(msDiff / (1000 * 60 * 60 * 24)));
+            const estFine = lateDays * 5;
+
+            return (
+              <div className={`p-3 rounded-xl border text-xs ${lateDays > 0 ? 'bg-amber-50/90 border-amber-200 text-amber-900' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                <div className="flex justify-between items-center font-semibold">
+                  <span>Computed Due Date:</span>
+                  <span className="font-mono">{dueStr}</span>
+                </div>
+                {lateDays > 0 ? (
+                  <div className="mt-1.5 flex justify-between items-center text-amber-800 font-bold">
+                    <span>⚠️ Backdated Loan Status:</span>
+                    <span>{lateDays} days overdue • Fine: ₹{estFine}.00</span>
+                  </div>
+                ) : (
+                  <div className="mt-1 text-[11px] text-emerald-700 font-medium">
+                    ✓ Active loan will be within validity period.
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="pt-2 flex justify-end gap-2.5">
             <button

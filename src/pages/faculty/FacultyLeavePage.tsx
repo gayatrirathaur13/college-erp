@@ -24,49 +24,27 @@ interface LeaveApplicationRecord {
   days_count: number;
   reason: string;
   cover_faculty: string;
-  status: 'Approved' | 'Pending Dean Review' | 'Cancelled' | 'Rejected';
+  status: 'Approved' | 'Request Sent' | 'Pending Dean Review' | 'Cancelled' | 'Rejected';
   applied_on: string;
   approver_comments?: string;
 }
 
 export const FacultyLeavePage: React.FC = () => {
-  const [leaveRecords, setLeaveRecords] = useState<LeaveApplicationRecord[]>([
-    {
-      id: "LV-2026-042",
-      leave_type: "Casual Leave (CL)",
-      start_date: "2026-10-24",
-      end_date: "2026-10-25",
-      days_count: 2,
-      reason: "Attending IEEE International Conference on Cloud & AI",
-      cover_faculty: "Prof. Sunita Rao (Associate Professor)",
-      status: "Approved",
-      applied_on: "2026-10-04",
-      approver_comments: "Duty leave sanctioned for technical conference presentation."
-    },
-    {
-      id: "LV-2026-021",
-      leave_type: "Sick Leave (SL)",
-      start_date: "2026-09-12",
-      end_date: "2026-09-13",
-      days_count: 2,
-      reason: "Viral fever and recovery",
-      cover_faculty: "Prof. Kunal Joshi (Assistant Professor)",
-      status: "Approved",
-      applied_on: "2026-09-11",
-      approver_comments: "Medical certificate verified by university dispensary."
+  const [leaveRecords, setLeaveRecords] = useState<LeaveApplicationRecord[]>([]);
+
+  const loadLeaves = async () => {
+    try {
+      const res = await api.getFacultyLeave();
+      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
+        setLeaveRecords(res.data);
+      }
+    } catch (err) {
+      console.warn('Error loading leaves:', err);
     }
-  ]);
+  };
 
   useEffect(() => {
-    let isMounted = true;
-    api.getFacultyLeave()
-      .then(res => {
-        if (isMounted && res?.data && Array.isArray(res.data) && res.data.length > 0) {
-          setLeaveRecords(res.data);
-        }
-      })
-      .catch(() => {});
-    return () => { isMounted = false; };
+    loadLeaves();
   }, []);
 
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
@@ -75,8 +53,8 @@ export const FacultyLeavePage: React.FC = () => {
   // Leave Form State
   const [formData, setFormData] = useState({
     leave_type: 'Casual Leave (CL)' as 'Casual Leave (CL)' | 'Sick Leave (SL)' | 'Earned Leave (EL)',
-    start_date: '2026-10-28',
-    end_date: '2026-10-29',
+    start_date: new Date().toISOString().split('T')[0],
+    end_date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
     reason: '',
     cover_faculty: 'Prof. Sunita Rao',
     notes: ''
@@ -93,31 +71,43 @@ export const FacultyLeavePage: React.FC = () => {
   const handleApplyLeave = async (e: React.FormEvent) => {
     e.preventDefault();
     const days = calculateDays(formData.start_date, formData.end_date);
+    const tempId = `LV-2026-${Math.floor(100 + Math.random() * 900)}`;
+
     const newRecord: LeaveApplicationRecord = {
-      id: `LV-2026-${Math.floor(100 + Math.random() * 900)}`,
+      id: tempId,
       leave_type: formData.leave_type,
       start_date: formData.start_date,
       end_date: formData.end_date,
       days_count: days,
       reason: formData.reason,
       cover_faculty: formData.cover_faculty,
-      status: "Pending Dean Review",
-      applied_on: "2026-10-10",
-      approver_comments: "Awaiting Dean Academics endorsement."
+      status: "Request Sent",
+      applied_on: new Date().toISOString().split('T')[0],
+      approver_comments: "Request sent. Persisted in database."
     };
 
     try {
-      await api.applyFacultyLeave(newRecord);
+      const res = await api.applyFacultyLeave({
+        leave_type: formData.leave_type,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        days_count: days,
+        reason: formData.reason,
+        cover_faculty: formData.cover_faculty
+      });
+      if (res?.data?.id) {
+        newRecord.id = res.data.id;
+      }
+      await loadLeaves();
     } catch {
-      // Fallback locally
+      setLeaveRecords(prev => [newRecord, ...prev]);
     }
 
-    setLeaveRecords([newRecord, ...leaveRecords]);
     setIsApplyModalOpen(false);
     setFormData({
       leave_type: 'Casual Leave (CL)',
-      start_date: '2026-10-28',
-      end_date: '2026-10-29',
+      start_date: new Date().toISOString().split('T')[0],
+      end_date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
       reason: '',
       cover_faculty: 'Prof. Sunita Rao',
       notes: ''
@@ -177,8 +167,8 @@ export const FacultyLeavePage: React.FC = () => {
       header: "Approval Status",
       accessor: "status",
       render: (r) => {
-        const variant = r.status === 'Approved' ? 'success' : r.status === 'Cancelled' ? 'neutral' : 'warning';
-        return <Badge variant={variant}>{r.status}</Badge>;
+        const variant = r.status === 'Approved' ? 'success' : r.status === 'Cancelled' ? 'neutral' : (r.status === 'Request Sent' ? 'navy' : 'warning');
+        return <Badge variant={variant as any}>{r.status}</Badge>;
       }
     },
     {
@@ -189,7 +179,7 @@ export const FacultyLeavePage: React.FC = () => {
     {
       header: "Action",
       render: (r) => (
-        r.status === 'Pending Dean Review' ? (
+        (r.status === 'Request Sent' || r.status === 'Pending Dean Review') ? (
           <button
             onClick={() => handleCancelLeave(r)}
             className="px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"

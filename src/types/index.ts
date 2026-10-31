@@ -212,7 +212,7 @@ export interface Timetable {
   start_time: string;
   end_time: string;
   room_no: string;
-  timetable_type: 'Lecture' | 'Lab' | 'Tutorial';
+  timetable_type: 'Lecture' | 'Lab' | 'Tutorial' | 'Seminar' | 'Workshop' | 'Practical' | 'Activity' | 'Mentorship' | string;
   subject_name?: string;
   faculty_name?: string;
   section_name?: string;

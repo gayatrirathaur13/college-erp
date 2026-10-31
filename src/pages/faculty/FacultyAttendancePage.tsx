@@ -56,6 +56,7 @@ export const FacultyAttendancePage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [isUpdatingExisting, setIsUpdatingExisting] = useState<boolean>(false);
+  const [lockAttendance, setLockAttendance] = useState<boolean>(false);
 
   // Timetable slot creation state
   const [isAddSlotModalOpen, setIsAddSlotModalOpen] = useState<boolean>(false);
@@ -171,7 +172,8 @@ export const FacultyAttendancePage: React.FC = () => {
         section_id: activeSection?.section_id || assignedSections[0]?.section_id || 1,
         period: selectedPeriod,
         topic: selectedSubject,
-        records: roster.map(s => ({ student_id: s.student_id, status: s.status }))
+        records: roster.map(s => ({ student_id: s.student_id, status: s.status })),
+        lock_attendance: lockAttendance
       });
 
       const newLog: SavedSessionLog = {
@@ -413,37 +415,69 @@ export const FacultyAttendancePage: React.FC = () => {
           </div>
 
           {/* Workflow Step 4, 5, 6, 7: Student Roster Table */}
-          <div className="erp-card p-6 bg-white space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
-              <div>
-                <h3 className="text-base font-bold text-navy-950">
-                  Assigned Student Roster ({roster.length} Enrolled Scholars)
-                </h3>
-                <p className="text-xs text-slate-500">
-                  {selectedDivision} • {selectedSubject} • {selectedDate}
-                </p>
-              </div>
+          {(() => {
+            const matchingLoggedSession = savedLogs.find(
+              log => log.date === selectedDate &&
+                     log.division === selectedDivision &&
+                     log.subject === selectedSubject &&
+                     log.period === selectedPeriod
+            );
+            const isAutoLocked = matchingLoggedSession ? (!matchingLoggedSession.can_edit) : false;
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleMarkAllPresent}
-                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  Mark All Present
-                </button>
+            return (
+              <div className="erp-card p-6 bg-white space-y-4">
+                {matchingLoggedSession && (
+                  <div className={`p-4 rounded-xl border flex items-center justify-between text-xs font-semibold ${
+                    isAutoLocked 
+                      ? 'bg-rose-50 border-rose-300 text-rose-900' 
+                      : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                  }`}>
+                    <div className="flex items-center gap-2.5">
+                      <CheckCircle2 className={`w-4 h-4 shrink-0 ${isAutoLocked ? 'text-rose-600' : 'text-emerald-600'}`} />
+                      <span>
+                        <strong>Lecture Attendance Status:</strong> {matchingLoggedSession.period} on {matchingLoggedSession.date} for {matchingLoggedSession.subject} was submitted with {matchingLoggedSession.present_count} Present and {matchingLoggedSession.absent_count} Absent.
+                        {isAutoLocked ? ' [LOCKED: Auto-locked after 1 week / finalized. Modifications disabled.]' : ' [ACTIVE: You may update attendance within 1 week of marking.]'}
+                      </span>
+                    </div>
+                    <Badge variant={isAutoLocked ? 'danger' : 'success'}>
+                      {isAutoLocked ? 'Locked (Finalized)' : 'Already Marked'}
+                    </Badge>
+                  </div>
+                )}
 
-                <button
-                  type="button"
-                  onClick={handleInitiateSave}
-                  className="px-4 py-1.5 bg-navy-950 hover:bg-navy-900 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  Save & Confirm Attendance
-                </button>
-              </div>
-            </div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-navy-950">
+                      Assigned Student Roster ({roster.length} Enrolled Scholars)
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      {selectedDivision} • {selectedSubject} • {selectedDate}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleMarkAllPresent}
+                      disabled={isAutoLocked}
+                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      Mark All Present
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleInitiateSave}
+                      disabled={isAutoLocked}
+                      title={isAutoLocked ? 'Attendance is locked. No modifications permitted.' : 'Save attendance to database'}
+                      className="px-4 py-1.5 bg-navy-950 hover:bg-navy-900 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      {isAutoLocked ? 'Attendance Locked' : matchingLoggedSession ? 'Update Saved Attendance' : 'Save & Confirm Attendance'}
+                    </button>
+                  </div>
+                </div>
 
             {/* Roster List */}
             <div className="overflow-x-auto">
@@ -498,8 +532,10 @@ export const FacultyAttendancePage: React.FC = () => {
               </table>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+    </div>
+  )}
 
       {activeTab === 'saved_logs' && (
         <div className="erp-card p-6 bg-white space-y-4">
@@ -723,6 +759,17 @@ export const FacultyAttendancePage: React.FC = () => {
                 Present: {roster.filter(s => s.status === 'Present').length} | Absent: {roster.filter(s => s.status === 'Absent').length}
               </div>
             </div>
+            <label className="flex items-center gap-2.5 p-3 bg-amber-50/80 hover:bg-amber-100/80 border border-amber-200 rounded-xl cursor-pointer transition-colors">
+              <input
+                type="checkbox"
+                checked={lockAttendance}
+                onChange={(e) => setLockAttendance(e.target.checked)}
+                className="w-4 h-4 rounded text-navy-950 focus:ring-navy-800"
+              />
+              <span className="text-xs font-bold text-amber-950">
+                Finalize & Lock Attendance (Cannot be modified once locked or after 1 week)
+              </span>
+            </label>
             <p className="text-[11px] text-slate-500 italic">
               Attendance records are stored in PostgreSQL attendance_records with foreign key and UNIQUE constraints.
             </p>

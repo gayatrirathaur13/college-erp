@@ -14,6 +14,7 @@ interface SubjectGrade {
   code: string;
   name: string;
   credits: number;
+  mid_sem_marks?: number;
   internal_marks: number;
   endsem_marks: number;
   total_marks: number;
@@ -130,17 +131,17 @@ export const StudentResultPage: React.FC = () => {
         <div className="space-y-6">
           {/* GPA Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div className="erp-card p-5 bg-navy-950 text-white">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-ice-300 block mb-1">
+            <div className="erp-card p-5 !bg-[#0b1329] text-white shadow-md border border-slate-700">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-sky-300 block mb-1">
                 Semester Grade Point Average
               </span>
-              <h3 className="text-3xl font-extrabold font-mono text-white">
+              <h3 className="text-3xl font-extrabold font-mono text-white tracking-tight">
                 {Number(currentResult.sgpa || 0).toFixed(2)}
               </h3>
-              <p className="text-xs text-ice-200 mt-1">Scale of 10.00</p>
+              <p className="text-xs text-sky-200/80 mt-1">Scale of 10.00</p>
             </div>
 
-            <div className="erp-card p-5 bg-white">
+            <div className="erp-card p-5 bg-white border border-slate-200 shadow-sm">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
                 Cumulative CGPA
               </span>
@@ -150,7 +151,7 @@ export const StudentResultPage: React.FC = () => {
               <p className="text-xs text-slate-400 mt-1">Overall Cumulative Score</p>
             </div>
 
-            <div className="erp-card p-5 bg-white">
+            <div className="erp-card p-5 bg-white border border-slate-200 shadow-sm">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
                 Credits Registered
               </span>
@@ -160,13 +161,13 @@ export const StudentResultPage: React.FC = () => {
               <p className="text-xs text-slate-400 mt-1">Current Academic Term</p>
             </div>
 
-            <div className="erp-card p-5 bg-white flex flex-col justify-between">
+            <div className="erp-card p-5 bg-white border border-slate-200 shadow-sm flex flex-col justify-between">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
                   Overall Outcome
                 </span>
-                <Badge variant={currentResult.overall_status === 'Pass' ? 'success' : 'danger'} size="md">
-                  {currentResult.overall_status === 'Pass' ? 'PASSED WITH DISTINCTION' : 'APPEAR FOR BACKLOG'}
+                <Badge variant={String(currentResult.overall_status).toUpperCase() === 'PASS' ? 'success' : 'danger'} size="md">
+                  {String(currentResult.overall_status).toUpperCase() === 'PASS' ? 'PASSED WITH DISTINCTION' : 'APPEAR FOR BACKLOG'}
                 </Badge>
               </div>
               <button
@@ -180,7 +181,7 @@ export const StudentResultPage: React.FC = () => {
           </div>
 
           {/* Subject Marks Table */}
-          <div className="erp-card p-6 bg-white overflow-hidden">
+          <div className="erp-card p-6 bg-white overflow-hidden border border-slate-200 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-base font-bold text-navy-950">{currentResult.semester_label}</h3>
@@ -199,34 +200,41 @@ export const StudentResultPage: React.FC = () => {
                       <th className="p-3">Course Code</th>
                       <th className="p-3">Course Subject Title</th>
                       <th className="p-3 text-center">Credits</th>
-                      <th className="p-3 text-right">Internal (40)</th>
-                      <th className="p-3 text-right">End-Sem (60)</th>
-                      <th className="p-3 text-right">Total (100)</th>
+                      <th className="p-3 text-right">Mid-Sem [20]</th>
+                      <th className="p-3 text-right">Internal [20]</th>
+                      <th className="p-3 text-right">End-Sem [60]</th>
+                      <th className="p-3 text-right">Total [100]</th>
                       <th className="p-3 text-center">Grade</th>
                       <th className="p-3 text-center">Grade Point</th>
                       <th className="p-3 text-center">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {currentSubjects.map((sub, idx) => (
-                      <tr key={sub.code || idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-3 font-mono font-bold text-navy-950">{sub.code}</td>
-                        <td className="p-3 font-semibold text-slate-800">{sub.name}</td>
-                        <td className="p-3 text-center font-mono">{sub.credits}</td>
-                        <td className="p-3 text-right font-mono text-slate-600">{sub.internal_marks}</td>
-                        <td className="p-3 text-right font-mono text-slate-600">{sub.endsem_marks}</td>
-                        <td className="p-3 text-right font-mono font-bold text-navy-950">{sub.total_marks}</td>
-                        <td className="p-3 text-center">
-                          <span className="font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                            {sub.grade_letter}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center font-mono font-semibold text-navy-900">{sub.grade_point.toFixed(1)}</td>
-                        <td className="p-3 text-center">
-                          <Badge variant={sub.status === 'Pass' ? 'success' : 'danger'}>{sub.status}</Badge>
-                        </td>
-                      </tr>
-                    ))}
+                    {currentSubjects.map((sub, idx) => {
+                      const mid = sub.mid_sem_marks !== undefined ? sub.mid_sem_marks : Number((sub.total_marks * 0.20).toFixed(1));
+                      const internal = sub.internal_marks !== undefined ? sub.internal_marks : Number((sub.total_marks * 0.20).toFixed(1));
+                      const endsem = sub.endsem_marks !== undefined ? sub.endsem_marks : Number((sub.total_marks - mid - internal).toFixed(1));
+                      return (
+                        <tr key={sub.code || idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-3 font-mono font-bold text-navy-950">{sub.code}</td>
+                          <td className="p-3 font-semibold text-slate-800">{sub.name}</td>
+                          <td className="p-3 text-center font-mono">{sub.credits}</td>
+                          <td className="p-3 text-right font-mono text-slate-600">{mid}</td>
+                          <td className="p-3 text-right font-mono text-slate-600">{internal}</td>
+                          <td className="p-3 text-right font-mono text-slate-600">{endsem}</td>
+                          <td className="p-3 text-right font-mono font-bold text-navy-950">{sub.total_marks}</td>
+                          <td className="p-3 text-center">
+                            <span className="font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              {sub.grade_letter}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center font-mono font-semibold text-navy-900">{sub.grade_point.toFixed(1)}</td>
+                          <td className="p-3 text-center">
+                            <Badge variant={sub.status === 'Pass' ? 'success' : 'danger'}>{sub.status}</Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   DollarSign, FileText, CreditCard, Search, Filter, Plus,
   RefreshCw, CheckCircle2, ChevronRight, Eye, Receipt, Calendar, ArrowRight, X
@@ -11,7 +12,29 @@ interface FinanceFeesPageProps {
 }
 
 export const FinanceFeesPage: React.FC<FinanceFeesPageProps> = ({ initialTab = 'fees' }) => {
-  const [activeTab, setActiveTab] = useState<'fees' | 'structures' | 'payments' | 'reports'>(initialTab);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const getTabFromPath = (): 'fees' | 'structures' | 'payments' | 'reports' => {
+    if (location.pathname.includes('/fee-structures')) return 'structures';
+    if (location.pathname.includes('/payments')) return 'payments';
+    if (location.pathname.includes('/reports')) return 'reports';
+    return initialTab || 'fees';
+  };
+
+  const [activeTab, setActiveTab] = useState<'fees' | 'structures' | 'payments' | 'reports'>(getTabFromPath());
+
+  useEffect(() => {
+    setActiveTab(getTabFromPath());
+  }, [location.pathname]);
+
+  const handleTabChange = (tab: 'fees' | 'structures' | 'payments' | 'reports') => {
+    setActiveTab(tab);
+    if (tab === 'fees') navigate('/staff/fees');
+    else if (tab === 'payments') navigate('/staff/payments');
+    else if (tab === 'structures') navigate('/staff/fee-structures');
+    else if (tab === 'reports') navigate('/staff/reports');
+  };
 
   // Data states
   const [students, setStudents] = useState<any[]>([]);
@@ -84,10 +107,6 @@ export const FinanceFeesPage: React.FC<FinanceFeesPageProps> = ({ initialTab = '
     loadData();
   }, [statusFilter, deptFilter]);
 
-  useEffect(() => {
-    if (initialTab) setActiveTab(initialTab);
-  }, [initialTab]);
-
   // Open Student Details
   const viewStudentDetails = async (studentId: number) => {
     setSelectedStudentId(studentId);
@@ -114,7 +133,7 @@ export const FinanceFeesPage: React.FC<FinanceFeesPageProps> = ({ initialTab = '
         setPayStudentFees(fees);
         if (fees.length > 0) {
           setSelectedFeeId(String(fees[0].student_fee_id));
-          const bal = fees[0].amount_due - fees[0].amount_paid;
+          const bal = parseFloat(fees[0].balance_amount !== undefined ? fees[0].balance_amount : (fees[0].amount_due - fees[0].amount_paid));
           setPayAmount(String(bal > 0 ? bal : ''));
         }
       }
@@ -140,7 +159,11 @@ export const FinanceFeesPage: React.FC<FinanceFeesPageProps> = ({ initialTab = '
         setIsPayModalOpen(false);
         notify(res.message || 'Payment recorded successfully.');
         loadData();
-        if (selectedStudentId) viewStudentDetails(selectedStudentId);
+        if (payStudent?.student_id) {
+          viewStudentDetails(payStudent.student_id);
+        } else if (selectedStudentId) {
+          viewStudentDetails(selectedStudentId);
+        }
       }
     } catch (err: any) {
       alert(err.message || 'Failed to record payment');
@@ -206,7 +229,7 @@ export const FinanceFeesPage: React.FC<FinanceFeesPageProps> = ({ initialTab = '
       {/* Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200">
         <button
-          onClick={() => setActiveTab('fees')}
+          onClick={() => handleTabChange('fees')}
           className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'fees'
               ? 'border-[#9B59B6] text-[#9B59B6]'
@@ -217,7 +240,7 @@ export const FinanceFeesPage: React.FC<FinanceFeesPageProps> = ({ initialTab = '
           <span>Student Dues ({students.length})</span>
         </button>
         <button
-          onClick={() => setActiveTab('payments')}
+          onClick={() => handleTabChange('payments')}
           className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'payments'
               ? 'border-[#9B59B6] text-[#9B59B6]'
@@ -228,7 +251,7 @@ export const FinanceFeesPage: React.FC<FinanceFeesPageProps> = ({ initialTab = '
           <span>Payment Receipts ({payments.length})</span>
         </button>
         <button
-          onClick={() => setActiveTab('structures')}
+          onClick={() => handleTabChange('structures')}
           className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'structures'
               ? 'border-[#9B59B6] text-[#9B59B6]'
@@ -560,18 +583,21 @@ export const FinanceFeesPage: React.FC<FinanceFeesPageProps> = ({ initialTab = '
                 setSelectedFeeId(e.target.value);
                 const fee = payStudentFees.find(f => String(f.student_fee_id) === e.target.value);
                 if (fee) {
-                  const bal = fee.amount_due - fee.amount_paid;
+                  const bal = parseFloat(fee.balance_amount !== undefined ? fee.balance_amount : (fee.amount_due - fee.amount_paid));
                   setPayAmount(String(bal > 0 ? bal : ''));
                 }
               }}
               required
               className="w-full text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#9B59B6]"
             >
-              {payStudentFees.map(f => (
-                <option key={f.student_fee_id} value={f.student_fee_id}>
-                  {f.fee_type || 'Tuition Fee'} (Due: ₹{(f.amount_due - f.amount_paid).toLocaleString('en-IN')})
-                </option>
-              ))}
+              {payStudentFees.map(f => {
+                const bal = parseFloat(f.balance_amount !== undefined ? f.balance_amount : (f.amount_due - f.amount_paid));
+                return (
+                  <option key={f.student_fee_id} value={f.student_fee_id}>
+                    {f.fee_type || 'Tuition Fee'} (Due: ₹{bal.toLocaleString('en-IN')})
+                  </option>
+                );
+              })}
             </select>
           </div>
 

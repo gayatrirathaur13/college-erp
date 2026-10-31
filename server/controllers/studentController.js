@@ -69,20 +69,24 @@ async function getAttendance(req, res, next) {
       return res.status(403).json({ success: false, message: 'Student ID not associated with account.' });
     }
 
-    // Query aggregated subject attendance
+    // Query aggregated subject attendance dynamically from Supabase attendance_record and attendance_session
     const [records] = await query(
-      `SELECT sub.subject_code, sub.subject_name,
+      `SELECT sub.subject_id, sub.subject_code, sub.subject_name,
               COALESCE(MAX(f.faculty_name), 'Department Faculty') AS faculty_name,
-              COUNT(ar.record_id) AS total_classes,
-              SUM(CASE WHEN ar.status = 'Present' THEN 1 ELSE 0 END) AS classes_attended,
-              SUM(CASE WHEN ar.status = 'Absent' THEN 1 ELSE 0 END) AS classes_absent,
-              ROUND((SUM(CASE WHEN ar.status = 'Present' THEN 1 ELSE 0 END) / COUNT(ar.record_id)) * 100, 2) AS attendance_percentage
+              COUNT(ar.attendance_id) AS total_classes,
+              SUM(CASE WHEN ar.attendance_status = 'Present' OR ar.status = 'Present' THEN 1 ELSE 0 END) AS classes_attended,
+              SUM(CASE WHEN ar.attendance_status = 'Absent' OR ar.status = 'Absent' THEN 1 ELSE 0 END) AS classes_absent,
+              CASE
+                WHEN COUNT(ar.attendance_id) = 0 THEN 0.00
+                ELSE ROUND((SUM(CASE WHEN ar.attendance_status = 'Present' OR ar.status = 'Present' THEN 1 ELSE 0 END)::numeric / COUNT(ar.attendance_id)::numeric) * 100, 2)
+              END AS attendance_percentage
        FROM attendance_record ar
        JOIN attendance_session ses ON ar.session_id = ses.session_id
        JOIN subject sub ON ses.subject_id = sub.subject_id
        LEFT JOIN faculty f ON ses.faculty_id = f.faculty_id
        WHERE ar.student_id = ?
-       GROUP BY sub.subject_id, sub.subject_code, sub.subject_name`,
+       GROUP BY sub.subject_id, sub.subject_code, sub.subject_name
+       ORDER BY sub.subject_code ASC`,
       [studentId]
     );
 
@@ -100,6 +104,7 @@ async function getAttendance(req, res, next) {
     );
 
     const formattedAttendance = (records || []).map(r => ({
+      subject_id: r.subject_id,
       subject_code: r.subject_code,
       subject_name: r.subject_name,
       faculty_name: r.faculty_name,
@@ -179,6 +184,7 @@ async function getFees(req, res, next) {
       success: true,
       data: {
         bills: (feeInvoices || []).map(f => ({
+          student_fee_id: f.student_fee_id,
           id: f.invoice_no || `INV-${f.student_fee_id}`,
           semester: f.semester_name,
           category: f.fee_type,
@@ -189,6 +195,7 @@ async function getFees(req, res, next) {
           status: f.status
         })),
         payments: (payments || []).map(p => ({
+          payment_id: p.payment_id,
           receipt_no: p.transaction_reference || `REC-PAY-${p.payment_id}`,
           date: p.payment_date,
           amount: Number(p.amount),
@@ -196,6 +203,80 @@ async function getFees(req, res, next) {
           mode: p.payment_mode,
           status: p.status
         }))
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Student Self-Service Fee Payment (Partial or Full)
+ * POST /api/students/fees/pay
+ */
+async function payFee(req, res, next) {
+  try {
+    const studentId = req.user.student_id;
+    if (!studentId) {
+      return res.status(403).json({ success: false, message: 'Student ID not associated with account.' });
+    }
+
+    const { student_fee_id, amount, payment_mode } = req.body;
+    const payAmount = parseFloat(amount);
+    if (!payAmount || payAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid positive payment amount.' });
+    }
+
+    // Verify invoice belongs to this student
+    const [feeCheck] = await query(
+      `SELECT sf.*, fs.fee_type
+       FROM student_fee sf
+       JOIN fee_structure fs ON sf.fee_structure_id = fs.fee_structure_id
+       WHERE sf.student_fee_id = ? AND sf.student_id = ?`,
+      [student_fee_id, studentId]
+    );
+
+    if (!feeCheck || feeCheck.length === 0) {
+      return res.status(404).json({ success: false, message: 'Fee invoice record not found.' });
+    }
+
+    const currentFee = feeCheck[0];
+    const outstanding = parseFloat(currentFee.balance_amount || (Number(currentFee.amount_due) - Number(currentFee.amount_paid)));
+    if (payAmount > outstanding) {
+      return res.status(400).json({
+        success: false,
+        message: `Payment amount ₹${payAmount} exceeds the outstanding balance of ₹${outstanding}.`
+      });
+    }
+
+    // Insert into payment table
+    // Supabase trigger fn_payment_before validates positive balance and auto-generates transaction_reference
+    // Supabase trigger fn_payment_after recalculates student_fee amount_paid, balance_amount and status automatically!
+    const [payResult] = await query(
+      `INSERT INTO payment (student_fee_id, amount, payment_date, payment_mode, payment_status, status)
+       VALUES (?, ?, CURRENT_DATE, ?, 'Success', 'Success')
+       RETURNING payment_id, transaction_reference, amount, payment_date, payment_mode, payment_status, status`,
+      [student_fee_id, payAmount, payment_mode || 'UPI']
+    );
+
+    const insertedPayment = payResult[0];
+
+    // Fetch the updated student_fee row after database trigger execution
+    const [updatedFee] = await query(
+      `SELECT sf.*, fs.fee_type, sem.semester_name
+       FROM student_fee sf
+       JOIN fee_structure fs ON sf.fee_structure_id = fs.fee_structure_id
+       JOIN academic_semester sem ON fs.semester_id = sem.semester_id
+       WHERE sf.student_fee_id = ?`,
+      [student_fee_id]
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: `Payment of ₹${payAmount.toLocaleString('en-IN')} successfully settled via ${payment_mode || 'UPI'}.`,
+      data: {
+        payment: insertedPayment,
+        fee: updatedFee[0]
       }
     });
   } catch (error) {
@@ -407,20 +488,27 @@ async function getResults(req, res, next) {
           overall_status: r.overall_status,
           result_date: r.result_date ? new Date(r.result_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Published'
         })),
-        marks: (marks || []).map(m => ({
-          mark_id: m.mark_id,
-          semester_id: m.semester_id,
-          semester_number: m.semester_number,
-          code: m.subject_code,
-          name: m.subject_name,
-          credits: Number(m.credits || 3),
-          internal_marks: Math.round(Number(m.marks_obtained) * 0.4),
-          endsem_marks: Math.round(Number(m.marks_obtained) * 0.6),
-          total_marks: Number(m.marks_obtained),
-          grade_letter: m.grade_letter || (Number(m.marks_obtained) >= 90 ? 'O' : Number(m.marks_obtained) >= 80 ? 'A+' : Number(m.marks_obtained) >= 70 ? 'A' : 'B'),
-          grade_point: Number(m.grade_point || (Number(m.marks_obtained) / 10).toFixed(1)),
-          status: (m.status === 'Pass' || Number(m.marks_obtained) >= 40) ? 'Pass' : 'Fail'
-        }))
+        marks: (marks || []).map(m => {
+          const midSem = Number(m.mid_sem !== null && m.mid_sem !== undefined ? m.mid_sem : (Number(m.marks_obtained) * 0.20).toFixed(1));
+          const internal = Number(m.internal_marks !== null && m.internal_marks !== undefined ? m.internal_marks : (Number(m.marks_obtained) * 0.20).toFixed(1));
+          const endSem = Number(m.end_sem !== null && m.end_sem !== undefined ? m.end_sem : (Number(m.marks_obtained) - midSem - internal).toFixed(1));
+          const total = Number(m.marks_obtained);
+          return {
+            mark_id: m.mark_id,
+            semester_id: m.semester_id,
+            semester_number: m.semester_number,
+            code: m.subject_code,
+            name: m.subject_name,
+            credits: Number(m.credits || 3),
+            mid_sem_marks: midSem,
+            internal_marks: internal,
+            endsem_marks: endSem,
+            total_marks: total,
+            grade_letter: m.grade_letter || (total >= 90 ? 'O' : total >= 80 ? 'A+' : total >= 70 ? 'A' : total >= 60 ? 'B' : total >= 50 ? 'C' : total >= 40 ? 'D' : 'F'),
+            grade_point: Number(m.grade_point || (total / 10).toFixed(1)),
+            status: (m.status === 'Pass' || total >= 40) ? 'Pass' : 'Fail'
+          };
+        })
       }
     });
   } catch (error) {
@@ -439,6 +527,12 @@ async function getPlacement(req, res, next) {
       return res.status(403).json({ success: false, message: 'Student ID not associated with account.' });
     }
 
+    const [cgpaRows] = await query(
+      `SELECT cgpa FROM result WHERE student_id = ? ORDER BY result_date DESC, result_id DESC LIMIT 1`,
+      [studentId]
+    );
+    const studentCgpa = cgpaRows[0]?.cgpa ? Number(cgpaRows[0].cgpa) : 6.16;
+
     const [drives] = await query(
       `SELECT jd.*, c.company_name, el.minimum_cgpa
        FROM job_drive jd
@@ -448,7 +542,7 @@ async function getPlacement(req, res, next) {
     );
 
     const [applications] = await query(
-      `SELECT app.application_id, app.application_date, app.status,
+      `SELECT app.application_id, app.drive_id, app.application_date, app.status,
               jd.job_role, jd.package, c.company_name,
               p.status AS placement_status
        FROM application app
@@ -467,19 +561,28 @@ async function getPlacement(req, res, next) {
     return res.json({
       success: true,
       data: {
-        opportunities: (drives || []).map(d => ({
-          drive_id: d.drive_id,
-          company_name: d.company_name,
-          job_role: d.job_role,
-          package: d.package,
-          job_type: d.job_type,
-          min_cgpa: Number(d.minimum_cgpa || 7.0),
-          drive_date: (d.drive_date && !isNaN(new Date(d.drive_date).getTime())) ? new Date(d.drive_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Nov 2026',
-          deadline: (d.registration_deadline && !isNaN(new Date(d.registration_deadline).getTime())) ? new Date(d.registration_deadline).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Upcoming',
-          status: d.status || 'Open for Registration'
-        })),
+        student_cgpa: studentCgpa,
+        opportunities: (drives || []).map(d => {
+          const minCgpa = Number(d.minimum_cgpa || 7.0);
+          const isEligible = studentCgpa >= minCgpa;
+          return {
+            drive_id: d.drive_id,
+            company_name: d.company_name,
+            job_role: d.job_role,
+            package: d.package,
+            job_type: d.job_type,
+            min_cgpa: minCgpa,
+            is_eligible: isEligible,
+            ineligible_reason: isEligible ? null : `Your CGPA (${studentCgpa.toFixed(2)}) is below the minimum ${minCgpa.toFixed(1)} required.`,
+            drive_date: (d.drive_date && !isNaN(new Date(d.drive_date).getTime())) ? new Date(d.drive_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Nov 2026',
+            deadline: (d.registration_deadline && !isNaN(new Date(d.registration_deadline).getTime())) ? new Date(d.registration_deadline).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Upcoming',
+            status: d.status || 'Scheduled'
+          };
+        }),
         applications: (applications || []).map(a => ({
           app_id: `APP-2026-${String(a.application_id).padStart(4, '0')}`,
+          application_id: a.application_id,
+          drive_id: a.drive_id,
           company_name: a.company_name,
           job_role: a.job_role,
           package: a.package,
@@ -518,19 +621,42 @@ async function applyJobDrive(req, res, next) {
       });
     }
 
-    await query(
-      `INSERT INTO application (student_id, drive_id, application_date, status)
-       VALUES (?, ?, CURDATE(), 'Applied')
-       ON DUPLICATE KEY UPDATE status = 'Applied'`,
+    // Check if application already exists
+    const [existing] = await query(
+      `SELECT application_id, status FROM application WHERE student_id = ? AND drive_id = ?`,
       [studentId, drive_id]
     );
 
+    if (existing && existing.length > 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'You have already registered for this campus recruitment drive.',
+        data: existing[0]
+      });
+    }
+
+    // Insert into application table
+    // PostgreSQL Trigger trg_application_eligibility executes fn_application_eligibility()
+    // It verifies drive status, branch eligibility, minimum CGPA, and backlog policy
+    const [appResult] = await query(
+      `INSERT INTO application (student_id, drive_id, application_date, status)
+       VALUES (?, ?, CURRENT_DATE, 'Applied')
+       RETURNING application_id, application_date, status`,
+      [studentId, drive_id]
+    );
+
+    const insertedApp = appResult[0];
+
     return res.status(201).json({
       success: true,
-      message: 'Successfully applied to job drive.'
+      message: 'Successfully registered and applied to recruitment drive.',
+      data: insertedApp
     });
   } catch (error) {
-    next(error);
+    return res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to submit application for this drive.'
+    });
   }
 }
 
@@ -557,11 +683,11 @@ async function getDashboard(req, res, next) {
       [studentId]
     );
 
-    // 2. Attendance summary
+    // 2. Attendance summary from Supabase attendance_record
     const [attStats] = await query(
-      `SELECT COUNT(record_id) AS total_classes,
-              COALESCE(SUM(CASE WHEN status = 'Present' THEN 1 ELSE 0 END), 0) AS attended_classes,
-              COALESCE(SUM(CASE WHEN status = 'Absent' THEN 1 ELSE 0 END), 0) AS missed_classes
+      `SELECT COUNT(attendance_id) AS total_classes,
+              COALESCE(SUM(CASE WHEN attendance_status = 'Present' OR status = 'Present' THEN 1 ELSE 0 END), 0) AS attended_classes,
+              COALESCE(SUM(CASE WHEN attendance_status = 'Absent' OR status = 'Absent' THEN 1 ELSE 0 END), 0) AS missed_classes
        FROM attendance_record
        WHERE student_id = ?`,
       [studentId]
@@ -572,17 +698,21 @@ async function getDashboard(req, res, next) {
     const missedCls = Number(attStats[0]?.missed_classes || 0);
     const attPct = totalCls > 0 ? Number(((attendedCls / totalCls) * 100).toFixed(1)) : 85.0;
 
-    // 3. Subject-wise attendance
+    // 3. Subject-wise attendance dynamically calculated
     const [subjectAttendance] = await query(
       `SELECT sub.subject_code, sub.subject_name,
-              COUNT(ar.record_id) AS total,
-              SUM(CASE WHEN ar.status = 'Present' THEN 1 ELSE 0 END) AS attended,
-              ROUND((SUM(CASE WHEN ar.status = 'Present' THEN 1 ELSE 0 END) / COUNT(ar.record_id)) * 100, 1) AS pct
+              COUNT(ar.attendance_id) AS total,
+              SUM(CASE WHEN ar.attendance_status = 'Present' OR ar.status = 'Present' THEN 1 ELSE 0 END) AS attended,
+              CASE
+                WHEN COUNT(ar.attendance_id) = 0 THEN 0.0
+                ELSE ROUND((SUM(CASE WHEN ar.attendance_status = 'Present' OR ar.status = 'Present' THEN 1 ELSE 0 END)::numeric / COUNT(ar.attendance_id)::numeric) * 100, 1)
+              END AS pct
        FROM attendance_record ar
        JOIN attendance_session ses ON ar.session_id = ses.session_id
        JOIN subject sub ON ses.subject_id = sub.subject_id
        WHERE ar.student_id = ?
-       GROUP BY sub.subject_id, sub.subject_code, sub.subject_name`,
+       GROUP BY sub.subject_id, sub.subject_code, sub.subject_name
+       ORDER BY sub.subject_code ASC`,
       [studentId]
     );
 
@@ -706,6 +836,7 @@ module.exports = {
   getDashboard,
   getAttendance,
   getFees,
+  payFee,
   getLibrary,
   getExams,
   applyExam,

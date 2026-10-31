@@ -88,21 +88,21 @@ export const App: React.FC = () => {
 
             {/* TNP Cell Routes */}
             <Route path="companies" element={<TNPCompaniesPage />} />
-            <Route path="drives" element={<TNPPlacementsPage />} />
-            <Route path="applications" element={<TNPPlacementsPage />} />
-            <Route path="placements" element={<TNPPlacementsPage />} />
+            <Route path="drives" element={<TNPPlacementsPage initialTab="drives" />} />
+            <Route path="applications" element={<TNPPlacementsPage initialTab="applications" />} />
+            <Route path="placements" element={<TNPPlacementsPage initialTab="placements" />} />
 
             {/* Finance Officer Routes */}
-            <Route path="fees" element={<FinanceFeesPage />} />
-            <Route path="payments" element={<FinanceFeesPage />} />
-            <Route path="fee-structures" element={<FinanceFeesPage />} />
-            <Route path="reports" element={<FinanceFeesPage />} />
+            <Route path="fees" element={<FinanceFeesPage initialTab="fees" />} />
+            <Route path="payments" element={<FinanceFeesPage initialTab="payments" />} />
+            <Route path="fee-structures" element={<FinanceFeesPage initialTab="structures" />} />
+            <Route path="reports" element={<FinanceFeesPage initialTab="reports" />} />
 
             {/* Librarian Routes */}
             <Route path="books" element={<LibrarianBooksPage />} />
-            <Route path="issues" element={<LibrarianIssuancePage />} />
-            <Route path="overdue" element={<LibrarianIssuancePage />} />
-            <Route path="returns" element={<LibrarianIssuancePage />} />
+            <Route path="issues" element={<LibrarianIssuancePage initialTab="issues" />} />
+            <Route path="overdue" element={<LibrarianIssuancePage initialTab="overdue" />} />
+            <Route path="returns" element={<LibrarianIssuancePage initialTab="returns" />} />
           </Route>
 
           {/* Catch-all Fallback */}

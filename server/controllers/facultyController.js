@@ -123,8 +123,8 @@ async function getAttendanceRoster(req, res, next) {
     // Check if a specific section was requested
     const requestedSectionId = req.query.section_id ? parseInt(req.query.section_id, 10) : null;
 
-    // Get faculty's assigned sections from timetable
-    const [assignedSections] = await query(
+    // Get faculty's assigned sections (from timetable or department cohort)
+    let [assignedSections] = await query(
       `SELECT DISTINCT sec.section_id, sec.section_name
        FROM timetable t
        JOIN section sec ON t.section_id = sec.section_id
@@ -133,15 +133,42 @@ async function getAttendanceRoster(req, res, next) {
       [facultyId]
     );
 
-    // Get faculty's assigned subjects from timetable
-    const [assignedSubjects] = await query(
+    if (!assignedSections || assignedSections.length === 0) {
+      const [deptSections] = await query(
+        `SELECT sec.section_id, sec.section_name
+         FROM section sec
+         JOIN faculty f ON sec.department_id = f.department_id
+         WHERE f.faculty_id = ?
+         ORDER BY sec.section_id ASC`,
+        [facultyId]
+      );
+      assignedSections = deptSections || [];
+    }
+
+    // Get faculty's eligible assigned subjects (from timetable and faculty_subject_assignment)
+    let [assignedSubjects] = await query(
       `SELECT DISTINCT s.subject_id, s.subject_code, s.subject_name
-       FROM timetable t
-       JOIN subject s ON t.subject_id = s.subject_id
-       WHERE t.faculty_id = ?
-       ORDER BY s.subject_id ASC`,
-      [facultyId]
+       FROM (
+         SELECT subject_id FROM timetable WHERE faculty_id = ?
+         UNION
+         SELECT subject_id FROM faculty_subject_assignment WHERE faculty_id = ?
+       ) assigned
+       JOIN subject s ON assigned.subject_id = s.subject_id
+       ORDER BY s.subject_code ASC`,
+      [facultyId, facultyId]
     );
+
+    if (!assignedSubjects || assignedSubjects.length === 0) {
+      const [deptSubjects] = await query(
+        `SELECT s.subject_id, s.subject_code, s.subject_name
+         FROM subject s
+         JOIN faculty f ON s.department_id = f.department_id
+         WHERE f.faculty_id = ?
+         ORDER BY s.subject_code ASC`,
+        [facultyId]
+      );
+      assignedSubjects = deptSubjects || [];
+    }
 
     const activeSectionId = requestedSectionId || assignedSections[0]?.section_id || 1;
 
@@ -158,17 +185,22 @@ async function getAttendanceRoster(req, res, next) {
       `SELECT ses.session_id AS id, ses.session_date AS date, sec.section_name AS division,
               CONCAT(sub.subject_code, ' - ', sub.subject_name) AS subject,
               ses.period,
-              COUNT(rec.record_id) AS total_students,
-              SUM(CASE WHEN rec.status = 'Present' THEN 1 ELSE 0 END) AS present_count,
-              SUM(CASE WHEN rec.status = 'Absent' THEN 1 ELSE 0 END) AS absent_count,
+              COUNT(rec.attendance_id) AS total_students,
+              SUM(CASE WHEN rec.attendance_status = 'Present' OR rec.status = 'Present' THEN 1 ELSE 0 END) AS present_count,
+              SUM(CASE WHEN rec.attendance_status = 'Absent' OR rec.status = 'Absent' THEN 1 ELSE 0 END) AS absent_count,
               ses.created_at AS saved_at,
-              TRUE AS can_edit
+              ses.is_locked,
+              CASE 
+                WHEN ses.is_locked = TRUE THEN FALSE
+                WHEN ses.session_date < (CURRENT_DATE - INTERVAL '7 days') THEN FALSE
+                ELSE TRUE 
+              END AS can_edit
        FROM attendance_session ses
        JOIN subject sub ON ses.subject_id = sub.subject_id
        JOIN section sec ON ses.section_id = sec.section_id
        LEFT JOIN attendance_record rec ON ses.session_id = rec.session_id
        WHERE ses.faculty_id = ?
-       GROUP BY ses.session_id, ses.session_date, sec.section_name, sub.subject_code, sub.subject_name, ses.period, ses.created_at
+       GROUP BY ses.session_id, ses.session_date, sec.section_name, sub.subject_code, sub.subject_name, ses.period, ses.created_at, ses.is_locked
        ORDER BY ses.session_date DESC
        LIMIT 50`,
       [facultyId]
@@ -225,7 +257,7 @@ async function saveAttendance(req, res, next) {
       return res.status(403).json({ success: false, message: 'Faculty ID not associated with account.' });
     }
 
-    const { date, subject_id, section_id, period, topic, records } = req.body;
+    const { date, subject_id, section_id, period, topic, records, lock_attendance } = req.body;
     if (!records || !Array.isArray(records)) {
       return res.status(400).json({
         success: false,
@@ -243,7 +275,7 @@ async function saveAttendance(req, res, next) {
 
     // Check if session exists for this subject, section, date, and period (concurrency lock)
     const [existingSessions] = await conn.execute(
-      `SELECT session_id FROM attendance_session
+      `SELECT session_id, session_date, is_locked, created_at FROM attendance_session
        WHERE subject_id = ? AND section_id = ? AND session_date = ? AND period = ?
        LIMIT 1 FOR UPDATE`,
       [subId, secId, sessionDate, sessionPeriod]
@@ -253,29 +285,55 @@ async function saveAttendance(req, res, next) {
     let isUpdate = false;
 
     if (existingSessions.length > 0) {
-      sessionId = existingSessions[0].session_id;
+      const sess = existingSessions[0];
+      const sessDate = new Date(sess.session_date);
+      const isPastOneWeek = sessDate < new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+      if (sess.is_locked || isPastOneWeek) {
+        await conn.rollback();
+        conn.release();
+        return res.status(403).json({
+          success: false,
+          message: 'Attendance for this session is locked. Records older than 7 days or locked by faculty cannot be altered.'
+        });
+      }
+
+      sessionId = sess.session_id;
       isUpdate = true;
       await conn.execute(
-        `UPDATE attendance_session SET faculty_id = ?, topic_covered = ? WHERE session_id = ?`,
-        [facultyId, topic || 'Curriculum Lecture Session', sessionId]
+        `UPDATE attendance_session 
+         SET faculty_id = ?, topic_covered = ?, is_locked = COALESCE(?, is_locked) 
+         WHERE session_id = ?`,
+        [facultyId, topic || 'Curriculum Lecture Session', lock_attendance ? true : false, sessionId]
       );
     } else {
       const [sessResult] = await conn.execute(
-        `INSERT INTO attendance_session (subject_id, faculty_id, section_id, session_date, period, topic_covered)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [subId, facultyId, secId, sessionDate, sessionPeriod, topic || 'Curriculum Lecture Session']
+        `INSERT INTO attendance_session (subject_id, faculty_id, section_id, session_date, period, topic_covered, is_locked)
+         VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING session_id`,
+        [subId, facultyId, secId, sessionDate, sessionPeriod, topic || 'Curriculum Lecture Session', lock_attendance ? true : false]
       );
-      sessionId = sessResult.insertId;
+      sessionId = sessResult[0]?.session_id || sessResult.insertId;
     }
 
-    // Atomic multi-row upsert
+    // Atomic multi-row upsert into attendance_record
     for (const rec of records) {
-      await conn.execute(
-        `INSERT INTO attendance_record (session_id, student_id, status)
-         VALUES (?, ?, ?)
-         ON DUPLICATE KEY UPDATE status = VALUES(status)`,
-        [sessionId, rec.student_id, rec.status || 'Present']
+      const [existingRec] = await conn.execute(
+        `SELECT attendance_id FROM attendance_record WHERE session_id = ? AND student_id = ?`,
+        [sessionId, rec.student_id]
       );
+      const attStatus = rec.status || 'Present';
+      if (existingRec && existingRec.length > 0) {
+        await conn.execute(
+          `UPDATE attendance_record SET attendance_status = ?, status = ?, marked_at = NOW() WHERE attendance_id = ?`,
+          [attStatus, attStatus, existingRec[0].attendance_id]
+        );
+      } else {
+        await conn.execute(
+          `INSERT INTO attendance_record (session_id, student_id, attendance_status, status, marked_at)
+           VALUES (?, ?, ?, ?, NOW())`,
+          [sessionId, rec.student_id, attStatus, attStatus]
+        );
+      }
     }
 
     await conn.commit();
@@ -311,7 +369,7 @@ async function getGradingRoster(req, res, next) {
     const deptId = fac[0]?.department_id || 1;
 
     const [marks] = await query(
-      `SELECT m.mark_id, m.marks_obtained, m.max_marks, m.grade_letter, m.status,
+      `SELECT m.mark_id, m.mid_sem, m.internal_marks, m.end_sem, m.marks_obtained, m.max_marks, m.grade_letter, m.status,
               s.student_id, s.roll_no, s.student_name AS name,
               sub.subject_code, sub.subject_name
        FROM marks m
@@ -334,7 +392,7 @@ async function getGradingRoster(req, res, next) {
 }
 
 /**
- * Save Student Marks
+ * Save Student Marks (Uniform 20 Mid-Sem / 20 Internal / 60 End-Sem = 100 Total)
  * POST /api/faculty/grading
  */
 async function saveGrading(req, res, next) {
@@ -348,15 +406,22 @@ async function saveGrading(req, res, next) {
     }
 
     for (const m of marks) {
+      const midSem = Number(m.mid_sem || 0);
+      const internalMarks = Number(m.internal_marks || 0);
+      const endSem = Number(m.end_sem || 0);
+      const totalMarks = midSem + internalMarks + endSem;
+
       await query(
-        `UPDATE marks SET marks_obtained = ?, grade_letter = ?, status = ? WHERE student_id = ?`,
-        [m.marks_obtained, m.grade_letter, m.status || 'Present', m.student_id]
+        `UPDATE marks 
+         SET mid_sem = ?, internal_marks = ?, end_sem = ?, marks_obtained = ?, grade_letter = ?, status = ? 
+         WHERE student_id = ?`,
+        [midSem, internalMarks, endSem, totalMarks, m.grade_letter, m.status || 'Present', m.student_id]
       );
     }
 
     return res.json({
       success: true,
-      message: `Successfully updated marks for ${marks.length} students.`
+      message: `Successfully updated and sealed marks for ${marks.length} students.`
     });
   } catch (error) {
     next(error);
@@ -416,7 +481,7 @@ async function applyLeave(req, res, next) {
 
     await query(
       `INSERT INTO faculty_leave (leave_code, faculty_id, leave_type, start_date, end_date, days_count, reason, cover_faculty_name, status, applied_on)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending Dean Review', CURDATE())`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Request Sent', CURRENT_DATE)`,
       [leaveCode, facultyId, leave_type, start_date, end_date, days_count || 1, reason || 'Personal Leave', cover_faculty || null]
     );
 
@@ -432,7 +497,7 @@ async function applyLeave(req, res, next) {
         days_count,
         reason,
         cover_faculty,
-        status: 'Pending Dean Review',
+        status: 'Request Sent',
         applied_on: new Date().toISOString().split('T')[0]
       }
     });

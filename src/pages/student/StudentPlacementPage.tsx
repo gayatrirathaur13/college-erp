@@ -3,7 +3,9 @@ import {
   Briefcase, 
   CheckCircle2, 
   FileText, 
-  Loader2
+  Loader2,
+  AlertCircle,
+  XCircle
 } from 'lucide-react';
 import { Badge } from '../../components/common/Badge';
 import { Modal } from '../../components/common/Modal';
@@ -19,6 +21,8 @@ interface StudentJobOpportunity {
   package: string;
   job_type: string;
   min_cgpa: number;
+  is_eligible?: boolean;
+  ineligible_reason?: string;
   drive_date: string;
   deadline: string;
   status: string;
@@ -26,6 +30,8 @@ interface StudentJobOpportunity {
 
 interface StudentJobApplication {
   app_id: string;
+  drive_id?: number;
+  application_id?: number;
   company_name: string;
   job_role: string;
   package: string;
@@ -46,6 +52,7 @@ export const StudentPlacementPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'open_jobs' | 'my_applications' | 'announcements'>('open_jobs');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const [opportunities, setOpportunities] = useState<StudentJobOpportunity[]>([]);
   const [myApplications, setMyApplications] = useState<StudentJobApplication[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -77,6 +84,7 @@ export const StudentPlacementPage: React.FC = () => {
 
   const handleApplyDrive = (job: StudentJobOpportunity) => {
     setSelectedJob(job);
+    setApplyError(null);
     setIsApplyModalOpen(true);
   };
 
@@ -84,14 +92,17 @@ export const StudentPlacementPage: React.FC = () => {
     if (!selectedJob) return;
     try {
       setSubmitting(true);
+      setApplyError(null);
       const res = await api.applyStudentJobDrive(selectedJob.drive_id);
       if (res.success) {
         setIsApplyModalOpen(false);
         await fetchData();
         setActiveTab('my_applications');
+      } else {
+        setApplyError(res.message || 'Application was not processed.');
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to submit application.');
+      setApplyError(err.message || 'Database validation failed: Ineligible for this recruitment drive.');
     } finally {
       setSubmitting(false);
     }
@@ -133,15 +144,28 @@ export const StudentPlacementPage: React.FC = () => {
     {
       header: "Action",
       render: (j) => {
-        const alreadyApplied = myApplications.some(a => a.company_name === j.company_name);
-        return alreadyApplied ? (
-          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1 w-fit">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Registered
-          </span>
-        ) : (
+        const alreadyApplied = myApplications.some(a => a.drive_id === j.drive_id || a.company_name.toLowerCase() === j.company_name.toLowerCase());
+        if (alreadyApplied) {
+          return (
+            <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1 w-fit">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Registered
+            </span>
+          );
+        }
+        if (j.is_eligible === false) {
+          return (
+            <span 
+              className="text-xs font-semibold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200 flex items-center gap-1 w-fit cursor-help"
+              title={j.ineligible_reason || `CGPA criteria not met (Requires Min CGPA: ${j.min_cgpa})`}
+            >
+              <XCircle className="w-3.5 h-3.5 text-rose-600" /> Ineligible
+            </span>
+          );
+        }
+        return (
           <button
             onClick={() => handleApplyDrive(j)}
-            className="px-3 py-1.5 text-xs font-bold text-white bg-navy-950 hover:bg-navy-900 rounded-xl transition-all shadow-sm"
+            className="px-3 py-1.5 text-xs font-bold text-white bg-navy-950 hover:bg-navy-900 rounded-xl transition-all shadow-sm flex items-center gap-1.5"
           >
             Apply & Confirm
           </button>
@@ -333,6 +357,12 @@ export const StudentPlacementPage: React.FC = () => {
           }
         >
           <div className="space-y-3 text-xs">
+            {applyError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl flex items-center gap-2 font-medium">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
+                <span>{applyError}</span>
+              </div>
+            )}
             <p className="text-slate-600">
               By confirming, your verified student profile (Name: <strong>{user?.name}</strong>, Roll: <strong>{user?.codeOrRoll}</strong>, Department: <strong>{user?.department}</strong>) will be forwarded to the corporate recruitment team.
             </p>

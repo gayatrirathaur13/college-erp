@@ -1,15 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 
+const metaEnv = (import.meta as any)?.env || {};
+
 // Retrieve credentials safely from environment variables (supports VITE and NEXT_PUBLIC prefixes)
 const supabaseUrl = 
-  import.meta.env.VITE_SUPABASE_URL || 
-  import.meta.env.NEXT_PUBLIC_SUPABASE_URL || 
+  metaEnv.VITE_SUPABASE_URL || 
+  metaEnv.NEXT_PUBLIC_SUPABASE_URL || 
   'https://zkfpncueeexdpqtyrjbz.supabase.co';
 
 const supabaseAnonKey = 
-  import.meta.env.VITE_SUPABASE_ANON_KEY || 
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 
-  import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 
+  metaEnv.VITE_SUPABASE_ANON_KEY || 
+  metaEnv.VITE_SUPABASE_PUBLISHABLE_KEY || 
+  metaEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 
   'sb_publishable_uVUguiu0veLb-CazbES7Bg_ak0F_DDR';
 
 export const isSupabaseConfigured = (): boolean => {
